@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "drivers"
+version = "1.0.0"
+authors = [
+  { name="Spandan Anupam", email="s.anupam@fz-juelich.de" },
+]
+description = "Drivers for various instruments used in the SQUAD lab"
+readme = "README.md"
+requires-python = ">=3.9"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: GNU Affero General Public License v3",
+    "Operating System :: OS Independent",
+]
+keywords = ["qcodes"]
+dependencies = [
+  "qcodes",
+]
+
+
+[project.urls]
+"Homepage" = "https://gitlab.com/squad-lab/measurements/drivers"
+"Bug Tracker" = "https://gitlab.com/squad-lab/measurements/drivers/-/issues"
