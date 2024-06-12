@@ -8,9 +8,11 @@ from qcodes.instrument.channel import MultiChannelInstrumentParameter
 from qcodes.utils import validators as vals
 from qcodes.utils.dataset.doNd import do1d, do2d
 import qcodes as qc
-import Parameterhelp as ph
+import drivers.basel_helpers.Parameterhelp as ph
 import os
+
 log = logging.getLogger(__name__)
+
 
 class SP1060Exception(Exception):
     pass
@@ -19,11 +21,11 @@ class SP1060Exception(Exception):
 class SP1060Reader(object):
     def _vval_to_dacval(self, vval):
         """
-        Convert voltage to DAC value 
-        dacval=(Vout+10)*838860.75 
+        Convert voltage to DAC value
+        dacval=(Vout+10)*838860.75
         """
         try:
-            dacval = int((float(vval)+10)*838860.75 )
+            dacval = int((float(vval) + 10) * 838860.75)
             return dacval
         except:
             pass
@@ -34,56 +36,68 @@ class SP1060Reader(object):
         Vout=(dacval/838860.75 )–10
         """
         try:
-            vval = round((int(dacval.strip(),16)/float(838860.75))-10, 6)
+            vval = round((int(dacval.strip(), 16) / float(838860.75)) - 10, 6)
             return vval
         except:
             pass
 
 
 class SP1060MultiChannel(MultiChannelInstrumentParameter, SP1060Reader):
-    def __init__(self, channels:Sequence[InstrumentChannel], param_name: str, *args: Any, **kwargs: Any):
+    def __init__(
+        self,
+        channels: Sequence[InstrumentChannel],
+        param_name: str,
+        *args: Any,
+        **kwargs: Any,
+    ):
         super().__init__(channels, param_name, *args, **kwargs)
         self._channels = channels
         self._param_name = param_name
-        
+
         def get_raw(self):
-            output = tuple(chan.parameters[self._param_name].get() for chan in self._channels)
+            output = tuple(
+                chan.parameters[self._param_name].get() for chan in self._channels
+            )
             return output
-        
+
         def set_raw(self, value):
             for chan in self._channels:
                 chan.volt.set(value)
-            
-    
+
+
 class SP1060Channel(InstrumentChannel, SP1060Reader):
-   
+
     def __init__(self, parent, name, channel, min_val=-10, max_val=10):
         super().__init__(parent, name)
-        
+
         # validate channel number
-        self._CHANNEL_VAL = vals.Ints(1,24)
+        self._CHANNEL_VAL = vals.Ints(1, 24)
         self._CHANNEL_VAL.validate(channel)
         self._channel = channel
 
         # limit voltage range
         self._volt_val = vals.Numbers(min(min_val, max_val), max(min_val, max_val))
-        
-        self.add_parameter('volt',
-                           label = 'C {}'.format(channel),
-                           unit = 'V',
-                           set_cmd = partial(self._parent._set_voltage, channel),
-                           set_parser = self._vval_to_dacval,
-                           get_cmd = partial(self._parent._read_voltage, channel),
-                           vals = self._volt_val 
-                           )
+
+        self.add_parameter(
+            "volt",
+            label="C {}".format(channel),
+            unit="V",
+            set_cmd=partial(self._parent._set_voltage, channel),
+            set_parser=self._vval_to_dacval,
+            get_cmd=partial(self._parent._read_voltage, channel),
+            vals=self._volt_val,
+        )
+
 
 class SP1060(VisaInstrument, SP1060Reader):
     """
     QCoDeS driver for the Basel Precision Instruments SP1060 LNHR DAC
     https://www.baspi.ch/low-noise-high-resolution-dac
     """
-    
-    def __init__(self, name, address, min_val=-10, max_val=10, baud_rate=115200, **kwargs):
+
+    def __init__(
+        self, name, address, min_val=-10, max_val=10, baud_rate=115200, **kwargs
+    ):
         """
         Creates an instance of the SP1060 24 channel LNHR DAC instrument.
         Args:
@@ -104,49 +118,51 @@ class SP1060(VisaInstrument, SP1060Reader):
         handle.stop_bits = visa.constants.StopBits.one
         handle.data_bits = 8
         handle.flow_control = visa.constants.VI_ASRL_FLOW_XON_XOFF
-        handle.write_termination = '\r\n'
-        handle.read_termination = '\r\n'
+        handle.write_termination = "\r\n"
+        handle.read_termination = "\r\n"
 
         # Create channels
-        channels = ChannelList(self, 
-                               "Channels", 
-                               SP1060Channel, 
-                               snapshotable = False,
-                               multichan_paramclass = SP1060MultiChannel)
+        channels = ChannelList(
+            self,
+            "Channels",
+            SP1060Channel,
+            snapshotable=False,
+            multichan_paramclass=SP1060MultiChannel,
+        )
         self.num_chans = 24
-        
-        for i in range(1, 1+self.num_chans):
-            channel = SP1060Channel(self, 'chan{:1}'.format(i), i)
+
+        for i in range(1, 1 + self.num_chans):
+            channel = SP1060Channel(self, "chan{:1}".format(i), i)
             channels.append(channel)
-            self.add_submodule('ch{:1}'.format(i), channel)
+            self.add_submodule("ch{:1}".format(i), channel)
         channels.lock()
-        self.add_submodule('channels', channels)
+        self.add_submodule("channels", channels)
 
         # Safety limits for sweeping DAC voltages
         # inter_delay: Minimum time (in seconds) between successive sets.
         #              If the previous set was less than this, it will wait until the
         #              condition is met. Can be set to 0 to go maximum speed with
-        #              no errors.    
-         
+        #              no errors.
+
         # step: max increment of parameter value.
         #       Larger changes are broken into multiple steps this size.
         #       When combined with delays, this acts as a ramp.
         for chan in self.channels:
             chan.volt.inter_delay = 0.02
             chan.volt.step = 0.01
-        
+
         # switch all channels ON if still OFF
-        if 'OFF' in self.query_all():
+        if "OFF" in self.query_all():
             self.all_on()
-            
+
         self.connect_message()
-        print('Current DAC output: ' +  str(self.channels[:].volt.get()))
+        print("Current DAC output: " + str(self.channels[:].volt.get()))
 
     def _set_voltage(self, chan, code):
-        return self.write('{:0} {:X}'.format(chan, code))
-            
+        return self.write("{:0} {:X}".format(chan, code))
+
     def _read_voltage(self, chan):
-        dac_code=self.write('{:0} V?'.format(chan))
+        dac_code = self.write("{:0} V?".format(chan))
         return self._dacval_to_vval(dac_code)
 
     def set_all(self, volt):
@@ -155,94 +171,102 @@ class SP1060(VisaInstrument, SP1060Reader):
         """
         for chan in self.channels:
             chan.volt.set(volt)
-    
+
     def query_all(self):
         """
         Query status of all DAC channels
         """
-        reply = self.write('All S?')
+        reply = self.write("All S?")
         print(reply)
-        return reply.replace("\r\n","").split(';')
-    
+        return reply.replace("\r\n", "").split(";")
+
     def all_on(self):
         """
         Turn on all channels.
         """
-        return self.write('ALL ON')
-      
+        return self.write("ALL ON")
+
     def all_off(self):
         """
         Turn off all channels.
         """
-        return self.write('ALL OFF')
-    
+        return self.write("ALL OFF")
+
     def empty_buffer(self):
-        # make sure every reply was read from the DAC 
-       # while self.visa_handle.bytes_in_buffer:
-       #     print(self.visa_handle.bytes_in_buffer)
-       #     print("Unread bytes in the buffer of DAC SP1060 have been found. Reading the buffer ...")
-       #     print(self.visa_handle.read_raw())
-       #      self.visa_handle.read_raw()
-       #     print("... done")
-        self.visa_handle.clear() 
-          
+        # make sure every reply was read from the DAC
+        # while self.visa_handle.bytes_in_buffer:
+        #     print(self.visa_handle.bytes_in_buffer)
+        #     print("Unread bytes in the buffer of DAC SP1060 have been found. Reading the buffer ...")
+        #     print(self.visa_handle.read_raw())
+        #      self.visa_handle.read_raw()
+        #     print("... done")
+        self.visa_handle.clear()
+
     def write(self, cmd):
         """
         Since there is always a return code from the instrument, we use ask instead of write
         TODO: interpret the return code (0: no error)
         """
         # make sure there is nothing in the buffer
-        self.empty_buffer()  
-        
+        self.empty_buffer()
+
         return self.ask(cmd)
-    
+
     def get_serial(self):
         """
         Returns the serial number of the device
         Note that when querying "HARD?" multiple statements, each terminated
-        by \r\n are returned, i.e. the device`s reply is not terminated with 
+        by \r\n are returned, i.e. the device`s reply is not terminated with
         the first \n received
         """
-        self.write('HARD?')
+        self.write("HARD?")
         reply = self.visa_handle.read()
         time.sleep(0.01)
-       # while self.visa_handle.bytes_in_buffer:
-       #     self.visa_handle.read_raw()
-       #     time.sleep(0.01)
+        # while self.visa_handle.bytes_in_buffer:
+        #     self.visa_handle.read_raw()
+        #     time.sleep(0.01)
         self.empty_buffer()
         return reply.strip()[3:]
-    
+
     def get_firmware(self):
         """
         Returns the firmware of the device
         Note that when querying "HARD?" multiple statements, each terminated
-        by \r\n are returned, i.e. the device`s reply is not terminated with 
+        by \r\n are returned, i.e. the device`s reply is not terminated with
         the first \n received
         """
-        self.write('SOFT?')
+        self.write("SOFT?")
         reply = self.visa_handle.read()
         time.sleep(0.01)
-       # while self.visa_handle.bytes_in_buffer:
-       #     self.visa_handle.read_raw()
-       #     time.sleep(0.01)
+        # while self.visa_handle.bytes_in_buffer:
+        #     self.visa_handle.read_raw()
+        #     time.sleep(0.01)
         self.empty_buffer()
         return reply.strip()[-5:]
-        
-    
+
     def get_idn(self):
         SN = self.get_serial()
         FW = self.get_firmware()
-        return dict(zip(('vendor', 'model', 'serial', 'firmware'), 
-                        ('BasPI', 'LNHR DAC SP1060', SN, FW)))
-                        
+        return dict(
+            zip(
+                ("vendor", "model", "serial", "firmware"),
+                ("BasPI", "LNHR DAC SP1060", SN, FW),
+            )
+        )
 
-    def set_newWaveform(self, channel = '12', waveform = '0', frequency = '100.0', 
-                        amplitude = '5.0', wavemem = '0'):
+    def set_newWaveform(
+        self,
+        channel="12",
+        waveform="0",
+        frequency="100.0",
+        amplitude="5.0",
+        wavemem="0",
+    ):
         """
         Write the Standard Waveform Function to be generated
         - Channel: [1 ... 24]
         Note: AWG-A and AWG-B only DAC-Channel[1...12], AWG-C and AWG-D only DAC-Channel[13...24]
-        - Waveforms: 
+        - Waveforms:
             0 = Sine function, for a Cosine function select a Phase [°] of 90°
             1 = Triangle function
             2 = Sawtooth function
@@ -255,65 +279,71 @@ class SP1060(VisaInstrument, SP1060Reader):
         - Amplitude: [-50.000000 ... 50.000000]
         - Wave-Memory (WAV-A/B/C/D) are represented by 0/1/2/3 respectively
         """
-        memsave = ''
-        if (wavemem == '0'):
-            memsave = 'A'
-        elif (wavemem == '1'):
-            memsave = 'B'
-        elif (wavemem == '2'):
-            memsave = 'C'
-        elif (wavemem == '3'):
-            memsave = 'D'
+        memsave = ""
+        if wavemem == "0":
+            memsave = "A"
+        elif wavemem == "1":
+            memsave = "B"
+        elif wavemem == "2":
+            memsave = "C"
+        elif wavemem == "3":
+            memsave = "D"
 
         sleep_time = 0.02
 
-        self.write('C WAV-B CLR') # Wave-Memory Clear.
+        self.write("C WAV-B CLR")  # Wave-Memory Clear.
         time.sleep(sleep_time)
-        self.write('C SWG MODE 0') # generate new Waveform.
+        self.write("C SWG MODE 0")  # generate new Waveform.
         time.sleep(sleep_time)
-        self.write('C SWG WF ' + waveform) # set the waveform.
+        self.write("C SWG WF " + waveform)  # set the waveform.
         time.sleep(sleep_time)
-        self.write('C SWG DF ' + frequency) # set frequency.
+        self.write("C SWG DF " + frequency)  # set frequency.
         time.sleep(sleep_time)
-        self.write('C SWG AMP ' + amplitude) # set the amplitude.
+        self.write("C SWG AMP " + amplitude)  # set the amplitude.
         time.sleep(sleep_time)
-        self.write('C SWG WMEM ' + wavemem) # set the Wave-Memory.
+        self.write("C SWG WMEM " + wavemem)  # set the Wave-Memory.
         time.sleep(sleep_time)
-        self.write('C SWG WFUN 0') # COPY to Wave-MEM -> Overwrite.
+        self.write("C SWG WFUN 0")  # COPY to Wave-MEM -> Overwrite.
         time.sleep(sleep_time)
-        self.write('C SWG LIN ' + channel) # COPY to Wave-MEM -> Overwrite.
+        self.write("C SWG LIN " + channel)  # COPY to Wave-MEM -> Overwrite.
         time.sleep(sleep_time)
-        self.write('C AWG-' + memsave + ' CH ' + channel) # Write the Selected DAC-Channel for the AWG.
+        self.write(
+            "C AWG-" + memsave + " CH " + channel
+        )  # Write the Selected DAC-Channel for the AWG.
         time.sleep(sleep_time)
-        self.write('C SWG APPLY') # Apply Wave-Function to Wave-Memory Now.
+        self.write("C SWG APPLY")  # Apply Wave-Function to Wave-Memory Now.
         time.sleep(sleep_time)
-        self.write('C WAV-' + memsave + ' SAVE') # Save the selected Wave-Memory (WAV-A/B/C/D) to the internal volatile memory.
+        self.write(
+            "C WAV-" + memsave + " SAVE"
+        )  # Save the selected Wave-Memory (WAV-A/B/C/D) to the internal volatile memory.
         time.sleep(sleep_time)
-        self.write('C WAV-' + memsave + ' WRITE') # Write the Wave-Memory (WAV-A/B/C/D) to the corresponding AWG-Memory (AWG-A/B/C/D).
+        self.write(
+            "C WAV-" + memsave + " WRITE"
+        )  # Write the Wave-Memory (WAV-A/B/C/D) to the corresponding AWG-Memory (AWG-A/B/C/D).
         time.sleep(0.5)
-        self.write('C AWG-' + memsave + ' START') # Apply Wave-Function to Wave-Memory Now.
+        self.write(
+            "C AWG-" + memsave + " START"
+        )  # Apply Wave-Function to Wave-Memory Now.
 
     def set_bandwidth(self, chan, code):
-            return self.write('{:0} {:1}'.format(chan, code))
+        return self.write("{:0} {:1}".format(chan, code))
 
     def get_bandwidth(self, chan):
-            dac_code = self.write('{:0} BW?'.format(chan))
-            return dac_code
-        
+        dac_code = self.write("{:0} BW?".format(chan))
+        return dac_code
+
     def read_mode(self, chan):
-            dac_code = self.write('{:0} M?'.format(chan))
-            return dac_code
+        dac_code = self.write("{:0} M?".format(chan))
+        return dac_code
 
+    ############################################################
 
+    #                     SET COMMANDS
 
-############################################################
+    ############################################################
+    ###  SET commands can be repeated at a maximum of 1KHz (1 msec)
 
-#                     SET COMMANDS
-
-############################################################
-###  SET commands can be repeated at a maximum of 1KHz (1 msec)
-
-### SET DAC commands always return a numeric response from the device:
+    ### SET DAC commands always return a numeric response from the device:
     """
     "0" = No error (normal)
     "1" = Invalid DAC-Channel
@@ -324,72 +354,79 @@ class SP1060(VisaInstrument, SP1060Reader):
     Channel)
     """
 
-
     """
     Set a specific DAC channel to a specified voltage.
     @chan - integer indicating channel
     @voltage - hexadecimal voltage value
     """
+
     def set_chan_voltage(self, chan, voltage):
-        code = self.write('{:0} {:X}'.format(chan, voltage))
-        return self.handleDACSetErrors(code) 
+        code = self.write("{:0} {:X}".format(chan, voltage))
+        return self.handleDACSetErrors(code)
 
     """
     Set all dac channels to a specific voltage.
     @voltage - hexadecimal voltage value
     """
+
     def set_all_voltage(self, voltage):
-        code = self.write('ALL {:X}'.format(voltage))
-        return self.handleDACSetErrors(code) 
-    
+        code = self.write("ALL {:X}".format(voltage))
+        return self.handleDACSetErrors(code)
+
     """
     turn on the specified channel
     @chan - integer 
     """
+
     def set_chan_on(self, chan):
-        code = self.write('{0} ON'.format(chan))
-        return self.handleDACSetErrors(code) 
+        code = self.write("{0} ON".format(chan))
+        return self.handleDACSetErrors(code)
 
     """
     turn off the specified channel
     @chan - integer 
     """
+
     def set_chan_off(self, chan):
-        code = self.write('{0} OFF'.format(chan))
-        return self.handleDACSetErrors(code) 
+        code = self.write("{0} OFF".format(chan))
+        return self.handleDACSetErrors(code)
 
     """
     Turn on all channels.
     """
+
     def set_all_on(self):
-        code = self.write('ALL ON')
-        return self.handleDACSetErrors(code) 
-      
-      
+        code = self.write("ALL ON")
+        return self.handleDACSetErrors(code)
+
     """
     Turn off all channels.
     """
+
     def set_all_off(self):
-        code = self.write('ALL OFF')
-        return self.handleDACSetErrors(code) 
+        code = self.write("ALL OFF")
+        return self.handleDACSetErrors(code)
 
     """
     Set the bandwidth of a specified channel (High or Low)
     @chan - integer 
     @code - string ("HBW"/"LBW")
     """
+
     def set_chan_bandwidth(self, chan, code):
-        code = self.write('{} {}'.format(chan, code))
-        return self.handleDACSetErrors(code) 
+        code = self.write("{} {}".format(chan, code))
+        return self.handleDACSetErrors(code)
+
     """
     Set the bandwidth of all channels (High or Low)
     @code - string ("HBW"/"LBW")
     """
-    def set_all_bandwidth(self, code):
-        code = self.write('ALL {}'.format(code))
-        return self.handleDACSetErrors(code) 
 
-#### All AWG SET Commands return a numeric response:
+    def set_all_bandwidth(self, code):
+        code = self.write("ALL {}".format(code))
+        return self.handleDACSetErrors(code)
+
+    #### All AWG SET Commands return a numeric response:
     """
     "0" = No error (normal)
     "1" = Invalid AWG-Memory
@@ -397,7 +434,7 @@ class SP1060(VisaInstrument, SP1060Reader):
     "3" = AWG-Address and/or AWG-Value out of range
     "4" = Mistyped
     """
-####
+    ####
 
     """
     Set an AWG_memory address to a value
@@ -405,13 +442,14 @@ class SP1060(VisaInstrument, SP1060Reader):
     @adr - hexadecimal address
     @value - hexadecimal value of voltage
     """
+
     def set_adr_AWGmem(self, mem, adr, value):
         code = self.write("AWG-{} {:X} {:X}".format(mem, adr, value))
 
     def set_all_AWGMem(self, mem, value):
         code = self.write("AWG-{} ALL {:X}".format(mem, value))
 
-#### All WAV SET Commands return a numeric response:
+    #### All WAV SET Commands return a numeric response:
     """
     "0" = No error (normal)
     "1" = Invalid WAV-Memory
@@ -419,7 +457,7 @@ class SP1060(VisaInstrument, SP1060Reader):
     "3" = WAV-Address and/or WAV-Voltage out of range
     "4" = Mistyped
     """
-####
+    ####
 
     """
     Set a WAV-memory address to a value
@@ -427,20 +465,21 @@ class SP1060(VisaInstrument, SP1060Reader):
     @adr - hecadecimal address
     @value - hexadecimal value of voltage
     """
+
     def set_adr_WAVMem(self, mem, adr, value):
         code = self.write("WAV-{0} {:X} {:X}".format(mem, adr, value))
 
     def set_all_WAVMem(self, mem, value):
         code = self.write("WAV-{0} ALL {:X}".format(mem, value))
 
-#### POLY command return codes:
+    #### POLY command return codes:
     """
     "0" = No error (normal)
     "1" = Invalid Polynomial Name
     "2" = Missing Polynomial Coefficient(s)
     "4" = Mistyped
     """
-####
+    ####
 
     """
     Set polynomial coefficients
@@ -448,68 +487,72 @@ class SP1060(VisaInstrument, SP1060Reader):
     @coefs - list of floating point values representing the coefficients (a0, a1, a2, a3...)
     
     """
+
     def set_polynomial(self, mem, coefs):
         fs = [str(c) for c in coefs]
-        code = self.write('POLY-{} {}'.format(mem, ' '.join(fs)))
+        code = self.write("POLY-{} {}".format(mem, " ".join(fs)))
 
+    ############################################################
 
-############################################################
+    #                    QUERY DATA COMMANDS
 
-#                    QUERY DATA COMMANDS
-
-############################################################
+    ############################################################
 
     """
     Read the actual voltage of a specified channel
     @chan - integer 
     """
+
     def query_chan_voltage(self, chan):
-        dac_code=self.write('{:0} V?'.format(chan))
+        dac_code = self.write("{:0} V?".format(chan))
         return self._dacval_to_vval(dac_code)
 
     def query_all_voltage(self):
-        dac_code=self.write('ALL V?')
+        dac_code = self.write("ALL V?")
         return dac_code
 
     """
     Read the registered voltage of a specified channel
     @chan - integer 
     """
+
     def query_chan_voltageReg(self, chan):
-        dac_code=self.write('{:0} VR?'.format(chan))
+        dac_code = self.write("{:0} VR?".format(chan))
         return self._dacval_to_vval(dac_code)
 
     def query_all_voltageReg(self):
-        dac_code=self.write('ALL VR?')
+        dac_code = self.write("ALL VR?")
         return dac_code
-
 
     """
     Query status of a channel
     @chan - integer 
     """
+
     def query_chan_status(self, chan):
-        reply = self.write('{0} S?'.format(chan))
+        reply = self.write("{0} S?".format(chan))
         return reply
 
     """
     Query status of all DAC channels
     """
+
     def query_all_status(self):
-        reply = self.write('All S?')
-        return reply.replace("\r\n","").split(';')
-    
+        reply = self.write("All S?")
+        return reply.replace("\r\n", "").split(";")
+
     """
     Query a bandwidth of a channel
     @chan - integer specifying channel
     """
+
     def query_chan_bandwidth(self, chan):
-        reply = self.write('{0} BW?'.format(chan))
+        reply = self.write("{0} BW?".format(chan))
         return reply
 
     def query_all_bandwidth(self):
-        reply = self.write('ALL BW?')
-        return reply.replace("\r\n","").split(';')
+        reply = self.write("ALL BW?")
+        return reply.replace("\r\n", "").split(";")
 
     """
     Query a DAC mode
@@ -517,21 +560,23 @@ class SP1060(VisaInstrument, SP1060Reader):
     See section 7.1.10 of programming manual for descriptions
     @chan - integer specifying channel
     """
+
     def query_chan_DACMode(self, chan):
-        reply = self.write('{0} M?'.format(chan))
+        reply = self.write("{0} M?".format(chan))
         return reply
-    
+
     def query_all_DACMode(self):
-        reply = self.write('ALL M?')
-        return reply.replace("\r\n","").split(';')
+        reply = self.write("ALL M?")
+        return reply.replace("\r\n", "").split(";")
 
     """
     Query memory contents of AWG memory at address(es)
     @mem - character indicating AWG memory A/B/C/D
     @adr - hex number indicating address
     """
+
     def query_adr_AWGmem(self, mem, adr):
-        reply = self.write('AWG-{0} {:X}?'.format(mem, adr))
+        reply = self.write("AWG-{0} {:X}?".format(mem, adr))
         return reply
 
     """
@@ -539,17 +584,19 @@ class SP1060(VisaInstrument, SP1060Reader):
     @mem - character indicating AWG memory A/B/C/D
     @block_start - hex number indicating start address
     """
+
     def query_block_AWGmem(self, mem, block_start):
-        reply = self.write('AWG-{0} {:X} BLK?'.format(mem, block_start))
-        return reply.replace("\r\n","").split(';')
+        reply = self.write("AWG-{0} {:X} BLK?".format(mem, block_start))
+        return reply.replace("\r\n", "").split(";")
 
     """
     Queries memory contents of WAV memory at address(es)
     @mem - character indicating AWG memory A/B/C/D
     @adr - hex number indicating address
     """
+
     def query_adr_WAVmem(self, mem, adr):
-        reply = self.write('WAV-{0} {:X}?'.format(mem, adr))
+        reply = self.write("WAV-{0} {:X}?".format(mem, adr))
         return reply
 
     """
@@ -557,50 +604,53 @@ class SP1060(VisaInstrument, SP1060Reader):
     @mem - character indicating AWG memory A/B/C/D
     @block_start - hex number indicating start address
     """
+
     def query_block_WAVmem(self, mem, block_start):
-        reply = self.write('WAV-{0} {:X} BLK?'.format(mem, block_start))
-        return reply.replace("\r\n","").split(';')
+        reply = self.write("WAV-{0} {:X} BLK?".format(mem, block_start))
+        return reply.replace("\r\n", "").split(";")
 
     """
     Query polynomial coefficients of a poly mem
     @mem - character indicating poly memory A/B/C/D
     """
+
     def query_coefs_Polymem(self, mem):
-        reply = self.write('POLY-{0}?'.format(mem))
-        return reply.replace("\r\n","").split(';')
+        reply = self.write("POLY-{0}?".format(mem))
+        return reply.replace("\r\n", "").split(";")
 
-             
-############################################################
+    ############################################################
 
-#                    QUERY INFORMATION COMMANDS
+    #                    QUERY INFORMATION COMMANDS
 
-############################################################
+    ############################################################
     def get_serial(self):
         """
         Returns the serial number of the device
         Note that when querying "HARD?" multiple statements, each terminated
-        by \r\n are returned, i.e. the device`s reply is not terminated with 
+        by \r\n are returned, i.e. the device`s reply is not terminated with
         the first \n received
         """
-        self.write('HARD?')
+        self.write("HARD?")
         reply = self.visa_handle.read()
         time.sleep(0.01)
-       # while self.visa_handle.bytes_in_buffer:
-       #     self.visa_handle.read_raw()
-       #     time.sleep(0.01)
+        # while self.visa_handle.bytes_in_buffer:
+        #     self.visa_handle.read_raw()
+        #     time.sleep(0.01)
         self.empty_buffer()
         return reply.strip()[3:]
 
     """
     Returns overview of the ASCII commands and queries
     """
+
     def get_overview(self):
-        reply = self.write('?')
+        reply = self.write("?")
         return reply
 
     """
     Shows the help text
     """
+
     def get_help(self):
         reply = self.write("HELP?")
         return reply
@@ -608,6 +658,7 @@ class SP1060(VisaInstrument, SP1060Reader):
     """
     Shows the health of the device (temperature, cpu-load, power-supplies)
     """
+
     def get_health(self):
         reply = self.write("HEALTH?")
         return reply
@@ -615,6 +666,7 @@ class SP1060(VisaInstrument, SP1060Reader):
     """
     Obtains the IP address of the DAC
     """
+
     def get_ip(self):
         reply = self.write("IP?")
         return reply
@@ -622,46 +674,51 @@ class SP1060(VisaInstrument, SP1060Reader):
     """
     Provides contact information (name, lab, website, email. phone)
     """
+
     def get_contact(self):
         reply = self.write("CONTACT?")
         return reply
 
-    
     def get_firmware(self):
         """
         Returns the firmware of the device
         Note that when querying "HARD?" multiple statements, each terminated
-        by \r\n are returned, i.e. the device`s reply is not terminated with 
+        by \r\n are returned, i.e. the device`s reply is not terminated with
         the first \n received
         """
-        self.write('SOFT?')
+        self.write("SOFT?")
         reply = self.visa_handle.read()
         time.sleep(0.01)
-       # while self.visa_handle.bytes_in_buffer:
-       #     self.visa_handle.read_raw()
-       #     time.sleep(0.01)
+        # while self.visa_handle.bytes_in_buffer:
+        #     self.visa_handle.read_raw()
+        #     time.sleep(0.01)
         self.empty_buffer()
         return reply.strip()[-5:]
-        
+
     """
     Obtain identification numbers and other manufacturer information about the DAC
     """
+
     def get_idn(self):
         SN = self.get_serial()
         FW = self.get_firmware()
-        return dict(zip(('vendor', 'model', 'serial', 'firmware'), 
-                        ('BasPI', 'LNHR DAC SP1060', SN, FW)))
-                        
+        return dict(
+            zip(
+                ("vendor", "model", "serial", "firmware"),
+                ("BasPI", "LNHR DAC SP1060", SN, FW),
+            )
+        )
 
-######################################################################################
+    ######################################################################################
 
-#                  DAC Update-Mode and Synchronization CONTROL COMMANDS
+    #                  DAC Update-Mode and Synchronization CONTROL COMMANDS
 
-######################################################################################
+    ######################################################################################
     """
     Returns the update mode of the device for the given board (higher or lower)
     @board - character, 'H'/'L' for higher or lower board
     """
+
     def read_updateMode(self, board):
         return self.write("C UM-{}?".format(board))
 
@@ -670,23 +727,24 @@ class SP1060(VisaInstrument, SP1060Reader):
     @board - character, 'H'/'L' for higher or lower board
     @mode = integer, either 0/1 for instantly/synchronous
     """
+
     def write_updateMode(self, board, mode):
         self.write("C UM-{} {}".format(board, mode))
-
 
     """
     Makes a synchronous DAC-update of all 12 channels on one DAC Board,
     or on both in parallel
     @board - string indicating board(s) to update: "H"/"L"/"HL" for higher/lower/both
     """
+
     def update_board_sync(self, board):
         return self.write("C SYNC-{}".format(board))
 
-######################################################################################
+    ######################################################################################
 
-#                  RAMP/STEP-Generator CONTROL COMMANDS
+    #                  RAMP/STEP-Generator CONTROL COMMANDS
 
-######################################################################################
+    ######################################################################################
 
     """
     Control the mode of the four RAMP/STEP generators.
@@ -695,6 +753,7 @@ class SP1060(VisaInstrument, SP1060Reader):
     @mem - the ramp memory to control: A/B/C/D/ALL
     @mode - string indicating mode: HOLD/START/STOP
     """
+
     def write_rampMode(self, mem, mode):
         return self.write("C RMP-{} {}".format(mem, mode))
 
@@ -703,6 +762,7 @@ class SP1060(VisaInstrument, SP1060Reader):
     States are Idle/Ramp_UP/Ramp_DOWN/Hold (coded as 0/1/2/3, respectively)
     @mem - character indicating ramp mem: A/B/C/D
     """
+
     def read_rampState(self, mem):
         return self.write("C RMP-{} S?".format(mem))
 
@@ -710,6 +770,7 @@ class SP1060(VisaInstrument, SP1060Reader):
     Read the cycles done since the start of the specified ramp generator
     @mem - character indicating ramp mem: A/B/C/D 
     """
+
     def read_rampCyclesDone(self, mem):
         return self.write("C RMP-{} CD?".format(mem))
 
@@ -717,6 +778,7 @@ class SP1060(VisaInstrument, SP1060Reader):
     Read the steps done since the start of the specified ramp generator
     @mem - character indicating ramp mem: A/B/C/D 
     """
+
     def read_rampStepsDone(self, mem):
         return self.write("C RMP-{} SD?".format(mem))
 
@@ -724,6 +786,7 @@ class SP1060(VisaInstrument, SP1060Reader):
     Reads the step-size voltage of the specified ramp generator
     @mem - character indicating ramp mem: A/B/C/D 
     """
+
     def read_rampStepSizeVoltage(self, mem):
         return self.write("C RMP-{} SSV?".format(mem))
 
@@ -731,6 +794,7 @@ class SP1060(VisaInstrument, SP1060Reader):
     Read the calculated step per cycle of a ramp memory.
     @mem - character indicating ramp mem: A/B/C/D
     """
+
     def read_rampStepsPerCycle(self, mem):
         return self.write("C RMP-{} ST?".format(mem))
 
@@ -742,6 +806,7 @@ class SP1060(VisaInstrument, SP1060Reader):
     A running generator always reads not available.
     @mem - character indicating ramp mem: A/B/C/D
     """
+
     def read_rampChannelAvailable(self, mem):
         return self.write("C RMP-{} AVA?".format(mem))
 
@@ -752,11 +817,13 @@ class SP1060(VisaInstrument, SP1060Reader):
     @mem - character indicating ramp mem: A/B/C/D 
     @chan - integer specifying the channel
     """
+
     def read_rampSelectedChannel(self, mem):
         return self.write("C RMP-{} CH?".format(mem))
 
     def write_rampSelectedChannel(self, mem, chan):
         return self.write("C RMP-{} CH {}".format(mem, chan))
+
     """
     Read or write the Start Voltages of the RAMP/STEP-Generators (RMP-A/B/C/D). The
     Start Voltage is a floating-point number in the range between -10.000000 V and
@@ -764,11 +831,13 @@ class SP1060(VisaInstrument, SP1060Reader):
     @mem - character indicating ramp mem: A/B/C/D 
     @voltage - floating point number indicating voltage
     """
+
     def read_rampStartVoltage(self, mem):
         return self.write("C RMP-{} STAV?".format(mem))
 
     def write_rampStartVoltage(self, mem, voltage):
         return self.write("C RMP-{} STAV {}".format(mem, voltage))
+
     """
     Read or write the Stop/Peak Voltages of the RAMP/STEP-Generators (RMP-A/B/C/D).
     The Stop/Peak Voltage is a floating-point number in the range between -10.000000 V and
@@ -779,11 +848,13 @@ class SP1060(VisaInstrument, SP1060Reader):
     @mem - character indicating ramp mem: A/B/C/D 
     @voltage - floating point number indicating voltage
     """
+
     def read_rampStopPeakVoltage(self, mem):
         return self.write("C RMP-{} STOV?".format(mem))
 
     def write_rampStopPeakVoltage(self, mem, voltage):
         return self.write("C RMP-{} STOV {}".format(mem, voltage))
+
     """
     Read or write the RAMP Times of the RAMP/STEP-Generators (RMP-A/B/C/D). The
     RAMP Time is a floating-point number in the range between 0.05 second and 1E6 seconds
@@ -792,11 +863,13 @@ class SP1060(VisaInstrument, SP1060Reader):
     @mem - character indicating ramp mem: A/B/C/D 
     @time - floating point number of seconds
     """
+
     def read_rampTime(self, mem):
         return self.write("C RMP-{} RT?".format(mem))
 
     def write_rampTime(self, mem, time):
         return self.write("C RMP-{} RT {}".format(mem, time))
+
     """
     Read or write the RAMP Shape of the RAMP/STEP-Generators (RMP-A/B/C/D). Two
     different Shapes of the Ramping/Stepping function can be written or readout:
@@ -804,11 +877,13 @@ class SP1060(VisaInstrument, SP1060Reader):
     @mem - character indicating ramp mem: A/B/C/D 
     @shape - integer 0/1 indicating shape of RAMP function
     """
+
     def read_rampShape(self, mem):
         return self.write("C RMP-{} RS?".format(mem))
 
     def write_rampShape(self, mem, shape):
         return self.write("C RMP-{} RS {}".format(mem, shape))
+
     """
     Read or write the number of RAMP Cycles-Set (0....4E9) of the four RAMP/STEP-
     Generators (RMP-A/B/C/D). The integer number represents the number of RAMP Cycles-
@@ -818,6 +893,7 @@ class SP1060(VisaInstrument, SP1060Reader):
     @mem - character indicating ramp mem: A/B/C/D 
     @cycles - integer specifying cycles 
     """
+
     def read_rampCyclesSet(self, mem):
         return self.write("C RMP-{} CS?".format(mem))
 
@@ -835,19 +911,18 @@ class SP1060(VisaInstrument, SP1060Reader):
     @mem - character indicating ramp mem: A/B/C/D 
     @sel - integer indicating selection, 0: RAMP, 1: STEP
     """
+
     def read_rampStepSelection(self, mem):
         return self.write("C RMP-{} STEP?".format(mem))
 
     def write_rampStepSelection(self, mem, sel):
         return self.write("C RMP-{} STEP {}".format(mem, sel))
 
+    ######################################################################################
 
+    #                  2D-Scan CONTROL COMMANDS
 
-######################################################################################
-
-#                  2D-Scan CONTROL COMMANDS
-
-######################################################################################
+    ######################################################################################
     """
     Read or write the Boolean parameter Normal-Start / Auto-Start AWG. If Auto-Start AWG
     is selected (1) the AWG gets automatically restarted after the STEP-Generator has been
@@ -860,6 +935,7 @@ class SP1060(VisaInstrument, SP1060Reader):
     @mem - character indicating AWG memory A/B/C/D
     @mode - integer of start mode, 0: normal 1: auto
     """
+
     def read_AWGStartMode(self, mem):
         return self.write("C AWG-{} AS?".format(mem, mode))
 
@@ -879,11 +955,13 @@ class SP1060(VisaInstrument, SP1060Reader):
     @mem - character indicating AWG memory A/B/C/D
     @mode - integer of mode, 0/1 (keep/reload)
     """
+
     def read_AWGReloadMode(self, mem):
         return self.write("C AWG-{} RLD?".format(mem, mode))
 
     def write_AWGReloadMode(self, mem, mode):
         return self.write("C AWG-{} RLD {}".format(mem, mode))
+
     """
     Read or write the Boolean parameter Skip/Apply Polynomial. If Apply Polynomial is
     selected (1) the Polynomial (POLY-A/B/C/D) is applied when the AWG-Memory (AWG-
@@ -899,11 +977,13 @@ class SP1060(VisaInstrument, SP1060Reader):
     @mam - character of poly memory A/B/C/D
     @mode - ingeger indicating mode 0/1 (skip/apply)
     """
+
     def read_AWGApplyPolyMode(self, mem):
         return self.write("C AWG-{} AP?".format(mem, mode))
 
     def write_AWGApplyPolyMode(self, mem, mode):
         return self.write("C AWG-{} AP {}".format(mem, mode))
+
     """
     Read or write the Adaptive Shift-Voltage per Step of the STEP-Generators (RMP-
     A/B/C/D). A simple adaptive 2D-Scan (with linear y-adaption) can be performed by this
@@ -919,18 +999,18 @@ class SP1060(VisaInstrument, SP1060Reader):
     @mem - character indicating AWG memory A/B/C/D
     @voltage - floating point number of voltage
     """
+
     def read_AWGShiftVoltage(self, mem):
         return self.write("C AWG-{} SHIV?".format(mem, mode))
 
     def write_AWGShiftVoltage(self, mem, voltage):
         return self.write("C AWG-{} SHIV {}".format(mem, voltage))
 
+    ######################################################################################
 
-######################################################################################
+    #                  AWG CONTROL COMMANDS
 
-#                  AWG CONTROL COMMANDS 
-
-######################################################################################
+    ######################################################################################
     """
     Read or write the Boolean parameter AWG Normal/AWG Only, related to the Lower DAC
     Board (AWG-A/B) or to the Higher DAC-Board (AWG-C/D). If AWG Only is selected (1), all
@@ -943,11 +1023,13 @@ class SP1060(VisaInstrument, SP1060Reader):
     @board - string indicating board, AB/CD for lower/higher board
     @mode - integer of mode, 0/1 (awg normal, awg only)
     """
+
     def read_AWGNormalMode(self, board):
         return self.write("C AWG-{} ONLY?".format(board))
 
-    def write_AWGNormalMode(self, board, mode): 
+    def write_AWGNormalMode(self, board, mode):
         return self.write("C AWG-{} ONLY {}".format(board, mode))
+
     """
     Control the mode of the four AWGs (AWG-A/B/C/D) by the two Boolean controls Start
     and Stop. After setting theses controls, they are reset internally. AWG-AB allows
@@ -958,14 +1040,17 @@ class SP1060(VisaInstrument, SP1060Reader):
     @mem - character indicating the AWG memory or memories A/B/C/D/AB/CD/ALL
     @mode - string indicating control mode, START/STOP
     """
-    def write_AWGControlMode(self, mem, mode): 
+
+    def write_AWGControlMode(self, mem, mode):
         return self.write("C AWG-{} {}".format(mem, mode))
+
     """
     Readout the State (Idle/Running) of the four AWGs (AWG-A/B/C/D). The returned
     integer number defines the actual state:
     0=Idle/1=Running
     @mem - character indicating AWG memory A/B/C/D
     """
+
     def read_AWGState(self, mem):
         return self.write("C AWG-{} S?".format(mem))
 
@@ -977,8 +1062,10 @@ class SP1060(VisaInstrument, SP1060Reader):
     counters are zero (0)
     @mem - character indicating AWG memory A/B/C/D
     """
-    def read_AWGCyclesDone(self, mem): 
+
+    def read_AWGCyclesDone(self, mem):
         return self.write("C AWG-{} CD?".format(mem))
+
     """
     Readout the Duration/Period of a complete AWG-Cycle (AWG Memory_Size * AWG Clock-
     Period) of the four AWGs (AWG-A/B/C/D). The unit of the Duration/Period is second
@@ -990,8 +1077,10 @@ class SP1060(VisaInstrument, SP1060Reader):
     decimal separator
     @mem - character indicating AWG memory A/B/C/D
     """
+
     def read_AWGDuration(self, mem):
         return self.write("C AWG-{} DP?".format(mem))
+
     """
     Readout if the selected DAC-Channel of the AWG (AWG-A/B/C/D) is available (not used
     by other AWG- or RAMP-Channels). The returned integer number gives the availability:
@@ -999,8 +1088,10 @@ class SP1060(VisaInstrument, SP1060Reader):
     Note: A running AWG reads always “Not Available (0)” on its DAC-Channel.
     @mem - character indicating AWG memory A/B/C/D
     """
-    def read_AWGChannelAvailable(self, mem): 
+
+    def read_AWGChannelAvailable(self, mem):
         return self.write("C AWG-{} AVA?".format(mem))
+
     """
     Read or write the Selected DAC-Channel for the AWG (AWG-A/B/C/D). Since the AWG-A
     and the AWG-B are running on the Lower DAC-Board, their DAC-Channels can only be in
@@ -1010,11 +1101,13 @@ class SP1060(VisaInstrument, SP1060Reader):
     @mem - character indicating AWG memory A/B/C/D
     @chan - integer of channel
     """
+
     def read_AWGSelectedChannel(self, mem):
         return self.write("C AWG-{} CH?".format(mem))
-    
-    def write_AWGSelectedChannel(self, mem, chan): 
+
+    def write_AWGSelectedChannel(self, mem, chan):
         return self.write("C AWG-{} CH {}".format(mem, chan))
+
     """
     Read or write the AWG-Memory Size of the AWG (AWG-A/B/C/D) which is an integer
     number in the range from 2 to 34’000. Each point of the AWG-Memory corresponds to a
@@ -1026,11 +1119,13 @@ class SP1060(VisaInstrument, SP1060Reader):
     @mem - character indicating AWG memory A/B/C/D
     @size - integer of memory size
     """
+
     def read_AWGMemorySize(self, mem):
         return self.write("C AWG-{} MS?".format(mem))
 
-    def write_AWGMemorySize(self, mem, size): 
+    def write_AWGMemorySize(self, mem, size):
         return self.write("C AWG-{} MS {}".format(mem, size))
+
     """
     Read or write the number of AWG Cycles-Set (0....4E9) of one of the four AWGs (AWG-
     A/B/C/D). The integer number represents the number of AWG Cycles-Set until the AWG
@@ -1039,11 +1134,13 @@ class SP1060(VisaInstrument, SP1060Reader):
     @mem - character indicating AWG memory A/B/C/D
     @cycles - integer of number of cycles
     """
+
     def read_AWGCyclesSet(self, mem):
         return self.write("C AWG-{} CS?".format(mem))
 
-    def write_AWGCyclesSet(self, mem, cycles): 
+    def write_AWGCyclesSet(self, mem, cycles):
         return self.write("C AWG-{} CS {}".format(mem, cycles))
+
     """
     Read or write the External Trigger Mode of one of the four AWGs (AWG-A/B/C/D). This
     sets the behavior of the four digital inputs “Trig In AWG-A/B/C/D” on the back panel of
@@ -1058,11 +1155,13 @@ class SP1060(VisaInstrument, SP1060Reader):
     @mem - character indicating AWG memory A/B/C/D
     @mode - integer indicating mode 0/1/2/3 (disabled/START only/START-STOP/SINGLE STEP)
     """
+
     def read_AWGExtTriggerMode(self, mem):
         return self.write("C AWG-{} TM?".format(mem))
 
-    def write_AWGExtTriggerMode(self, mem, mode): 
+    def write_AWGExtTriggerMode(self, mem, mode):
         return self.write("C AWG-{} TM {}".format(mem, mode))
+
     """
     Read or write the Clock-Period [μsec] (10....4E9) of the Lower (AWG-A+B) or the Higher
     DAC-Board (AWG-C+D). This integer number represents the AWG Clock-Period in μsec
@@ -1074,11 +1173,13 @@ class SP1060(VisaInstrument, SP1060Reader):
     @board - string indicating AWG board, AB/CD (lower, higher)
     @T - integer specifying period
     """
+
     def read_AWGClkPeriod(self, board):
         return self.write("C AWG-{} CP?".format(board))
 
-    def write_AWGClkPeriod(self, board, T): 
+    def write_AWGClkPeriod(self, board, T):
         return self.write("C AWG-{} CP {}".format(board, T))
+
     """
     Read or write the Control-Status (ON/OFF) of the external digital AWG 1 MHz Clock
     Reference TTL signal (on the D-SUB connector on the back-panel). This 1 MHz reference
@@ -1086,18 +1187,18 @@ class SP1060(VisaInstrument, SP1060Reader):
     the LNHR DAC II
     @mode - integer of mode 0/1 (OFF/ON)
     """
+
     def read_AWGClkRefState(self):
         return self.write("C AWG-1MHz?")
 
-    def write_AWGClkRefState(self, mode): 
+    def write_AWGClkRefState(self, mode):
         return self.write("C AWG-1MHz {}".format(mode))
 
+    ######################################################################################
 
-######################################################################################
+    #                  STANDARD WAVEFORM GENERATION (SWG) CONTROL COMMANDS
 
-#                  STANDARD WAVEFORM GENERATION (SWG) CONTROL COMMANDS
-
-######################################################################################
+    ######################################################################################
     """
     Read or write the Boolean parameter SWG Mode which can be either “Generate New
     Waveform” (0) or “Use Saved Waveform” (1). When the default Mode “Generate New
@@ -1107,11 +1208,13 @@ class SP1060(VisaInstrument, SP1060Reader):
     this recalled waveform; e.g., it can be copied to a Wave-Memory (WAV-A/B/C/D).
     @mode - integer of SWG mode 0/1 (use saved waveform/generate new waveform)
     """
+
     def read_SWGMode(self):
         return self.write("C SWG MODE?")
 
     def write_SWGMode(self, mode):
         return self.write("C SWG MODE {}".format(mode))
+
     """
     Read or write the Standard Waveform Function to be generated. The following eight
     different functions can be selected and are represented by these integer numbers:
@@ -1125,11 +1228,13 @@ class SP1060(VisaInstrument, SP1060Reader):
     7 = DC-Voltage only – a fixed voltage is generated
     @func - integer specifying function to be written, 0/1/2/3/4/5/6/7 (see above for coding scheme)
     """
+
     def read_SWGFunction(self):
         return self.write("C SWG WF?")
 
     def write_SWGFunction(self, func):
         return self.write("C SWG WF {}".format(func))
+
     """
     Read or write the Desired AWG-Frequency [Hz] of the Wave- and AWG-function.
     Sometimes it isn’t possible to reach exact this frequency; see also “Keep / Adapt AWG
@@ -1140,11 +1245,13 @@ class SP1060(VisaInstrument, SP1060Reader):
     Waveform consists of 10 points at an AWG Clock-Period of 10 μsec.
     @freq - floating point number specifying frequency in Hz
     """
+
     def read_SWGDesFrequency(self):
         return self.write("C SWG DF?")
 
     def write_SWGDesFrequency(self, freq):
         return self.write("C SWG DF {}".format(freq))
+
     """
     Read or write the Boolean parameter Keep/Adapt AWG Clock-Period. To reach the
     Desired AWG-Frequency as close as possible, select Adapt AWG Clock-Period.
@@ -1163,11 +1270,13 @@ class SP1060(VisaInstrument, SP1060Reader):
     0=Keep AWG Clock-Period/1=Adapt AWG Clock-Period
     @mode - integer of adaptive clock mode, 0/1 (keep/adapt)
     """
+
     def read_SWGApdativeClk(self):
         return self.write("C SWG ACLK?")
 
     def write_SWGAdaptiveClk(self, mode):
         return self.write("C SWG ACLK {}".format(mode))
+
     """
     Read or write the Amplitude [Vp] parameter of the generated Standard Waveform. This
     value corresponds to the peak-voltage of the generated Standard Waveform. For
@@ -1178,11 +1287,13 @@ class SP1060(VisaInstrument, SP1060Reader):
     flexibility in generating clipping-waveforms, also by applying a DC-Offset Voltage.
     @voltage - floating point number specifying the Vp parameter
     """
+
     def read_SWGAmplitude(self):
         return self.write("C SWG AMP?")
 
     def write_SWGAmplitude(self, voltage):
         return self.write("C SWG AMP {}".format(voltage))
+
     """
     Read or write the DC-Offset Voltage [V] parameter of the generated Standard Waveform.
     The DC-Offset Voltage is added to the function and therefore shifts the waveform in the
@@ -1192,11 +1303,13 @@ class SP1060(VisaInstrument, SP1060Reader):
     +10.000000 V; the decimal point must be a period (point)
     @voltage - floating point number specifying the DC offset voltage
     """
+
     def read_SWGDCOffset(self):
         return self.write("C SWG DCV?")
 
     def write_SWGDCOffset(self, voltage):
         return self.write("C SWG DCV {}".format(voltage))
+
     """
     Read or write the Phase [°] parameter of the generated Standard Waveform. The Phase
     shifts the generated waveform in time; it isn’t applicable for Gaussian-Noise, Ramp and
@@ -1205,11 +1318,13 @@ class SP1060(VisaInstrument, SP1060Reader):
     +360.0000°; the decimal point must be a period (point).
     @angle - floating point number indicating the phase angle
     """
+
     def read_SWGPhase(self):
         return self.write("C SWG PHA?")
 
     def write_SWGPhase(self, angle):
         return self.write("C SWG PHA {}".format(angle))
+
     """
     Read or write the Duty-Cycle [%] parameter for the generation of the Pulse-Waveform.
     The Duty-Cycle is only applicable for the Pulse function. A 50% Duty-Cycle results in a
@@ -1218,11 +1333,13 @@ class SP1060(VisaInstrument, SP1060Reader):
     100.000%; the decimal point must be a period (point).
     @dc - floating point number specifying the duty cycle percent
     """
+
     def read_SWGDutyCycle(self):
         return self.write("C SWG DUC?")
 
     def write_SWGDutyCycle(self, dc):
         return self.write("C SWG DUC {}".format(dc))
+
     """
     Read the Wave-Memory Size of the generated Standard Waveform. This Wave-Memory
     Size will also be the AWG-Memory Size, after writing to the AWG-Memory. The Wave-
@@ -1232,8 +1349,10 @@ class SP1060(VisaInstrument, SP1060Reader):
     while the AWG Clock-Period must be 10 μsec. Each point of the Wave-Memory
     corresponds to a DAC-Voltage in a range of ±10 V
     """
+
     def read_SWGMemSize(self):
         return self.write("C SWG MS?")
+
     """
     Read the Nearest AWG-Frequency [Hz] which can be reached as close as possible to the
     Desired AWG-Frequency [Hz]; is a floating-point number in the range between 0.001 Hz
@@ -1242,8 +1361,10 @@ class SP1060(VisaInstrument, SP1060Reader):
     Frequencies can be achieved, since the AWG-Clock Period can only be adjusted with a
     resolution of 1 μsec.
     """
+
     def read_SWGNearestFreq(self):
         return self.write("C SWG NF?")
+
     """
     Read the Waveform Clipping Status of the Generated Standard Waveform (SWG). If the
     amplitude of the generated waveform exceeds the maximum voltage of ± 10 V anywhere,
@@ -1251,8 +1372,10 @@ class SP1060(VisaInstrument, SP1060Reader):
     OK), the Clipping is not reset (0).
     0=Not Clipping/1=Clipping
     """
+
     def read_SWGClippingStatus(self):
         return self.write("C SWG CLP?")
+
     """
     Read the SWG/AWG Clock-Period [μsec] (10....4E9), which was used for the Standard
     Waveform Generation (SWG). This integer number represents the AWG Clock-Period in
@@ -1261,8 +1384,10 @@ class SP1060(VisaInstrument, SP1060Reader):
     is selected, the SWG/AWG Clock-Period is adapted to meet the Desired AWG Frequency
     as close as possible.
     """
+
     def read_SWGClkPeriod(self):
         return self.write("C SWG CP?")
+
     """
     Read or write the Selected Wave-Memory (WAV-A/B/C/D) to which the Wave-Function
     will be applied. If Keep AWG Clock-Period is selected above, the AWG Clock-Period of the
@@ -1270,11 +1395,13 @@ class SP1060(VisaInstrument, SP1060Reader):
     selected and from the Higher DAC-Board if Wave-Memory C or D is selected.
     @mem - integer specifying the WAV memory, 0/1/2/3 (A/B/C/D)
     """
+
     def read_SWGMemSelected(self):
         return self.write("C SWG WMEM?")
 
     def write_SWGMemSelected(self, mem):
         return self.write("C SWG WMEM {}".format(mem))
+
     """
     Read or write the Selected Wave-Function which will be applied on the generated
     Standard Waveform and the Selected Wave-Memory when “Apply to Wave-Memory Now”
@@ -1298,11 +1425,13 @@ class SP1060(VisaInstrument, SP1060Reader):
     8 = DIVIDE Wave-MEM @END
     @func - integer specifying the function to perform, 0/1/2/3/4/5/6/7/8 (see above for coding scheme)
     """
+
     def read_SWGSelectedFunc(self):
         return self.write("C SWG WFUN?")
 
     def write_SWGSelectedFunc(self, func):
         return self.write("C SWG WFUN {}".format(func))
+
     """
     Read or write the Boolean parameter No Linearization/Linearization for actual DAC-
     Channel. When “Copy to Wave-Memory Now” is performed, the actual selected AWG DAC-
@@ -1316,28 +1445,28 @@ class SP1060(VisaInstrument, SP1060Reader):
     0=No Linearization/1=Linearization for actual DAC-Channel
     @mode - integer specifying linearization mode, 0/1 (no lin/lin)
     """
+
     def read_SWGLinearization(self):
         return self.write("C SWG LIN?")
 
     def write_SWGLinearization(self, mode):
         return self.write("C SWG LIN {}".format(mode))
+
     """
     The Selected Wave-Function gets applied to the Selected Wave-Memory (WAV-A/B/C/D).
     At this moment, the actual selected AWG DAC-Channel gets registered if “Linearization for
     actual DAC-Channel” is selected (see above). After setting this control, it gets reset
     internally.
     """
+
     def apply_SWGFunction(self):
         return self.write("C SWG APPLY")
-    
 
+    ######################################################################################
 
+    #                  WAVE CONTROL COMMANDS
 
-######################################################################################
-
-#                  WAVE CONTROL COMMANDS
-
-######################################################################################
+    ######################################################################################
     """
     Read the Size of one of the five Wave-Memories (WAV-A/B/C/D/S). This Wave-Memory
     Size will also be the AWG-Memory Size, after writing to the AWG-Memory. The Wave-
@@ -1347,23 +1476,29 @@ class SP1060(VisaInstrument, SP1060Reader):
     always clear unused Wave-Memories.
     @mem - character indicating the wave memory, A/B/C/D/S 
     """
+
     def read_WAVMemSize(self, mem):
         return self.write("C WAV-{} MS?".format(mem))
+
     """
     Clear the selected Wave-Memory (WAV-A/B/C/D/S) and set the Wave-Memory Size to
     zero (0). The WAV-S is the Saved Waveform. After setting this control, it gets reset
     internally
     @mem - character indicating the wave memory, A/B/C/D/S 
     """
+
     def clear_WAVMem(self, mem):
         return self.write("C WAV-{} CLR".format(mem))
+
     """
     Save the selected Wave-Memory (WAV-A/B/C/D) to the internal volatile memory on the
     LNHR DAC II; it is called WAV-S.
     @mem - character indicating the wave memory, A/B/C/D/S 
     """
+
     def save_WAVMem(self, mem):
         return self.write("C WAV-{} SAVE".format(mem))
+
     """
     Read the corresponding DAC-Channel for the Linearization of one of the four Wave-
     Memories (WAV-A/B/C/D). The Linearization for this DAC-Channel is done when the
@@ -1373,8 +1508,10 @@ class SP1060(VisaInstrument, SP1060Reader):
     the not existing DAC-Channel 0 (zero) means that no linearization gets applied.
     @mem - character indicating the wave memory, A/B/C/D/S 
     """
+
     def read_WAVMemLinChannel(self, mem):
         return self.write("C WAV-{} LINCH?".format(mem))
+
     """
     Write the Wave-Memory (WAV-A/B/C/D) to the corresponding AWG-Memory (AWG-
     A/B/C/D). After setting this control, it gets reset internally. The Polynomial is only applied
@@ -1386,23 +1523,25 @@ class SP1060(VisaInstrument, SP1060Reader):
     selection
     @mem - character indicating the wave memory, A/B/C/D/S 
     """
+
     def write_WAVMemToAWGMem(self, mem):
         return self.write("C WAV-{} WRITE".format(mem))
+
     """
     During writing the Wave-Memory (WAV-A/B/C/D) to the corresponding AWG-Memory
     (AWG-A/B/C/D) this Busy flag is set (1); if it is Idle state the value is zero (0).
     0=Idle/1=Busy (writing WAV- to AWG-Memory
     @mem - character indicating the wave memory, A/B/C/D/S 
     """
+
     def read_WAVBusyWriting(self, mem):
         return self.write("C WAV-{} BUSY?".format(mem))
 
+    ####################################################################
 
-####################################################################
+    #               SPECIAL AND COMPOUND FUNCTIONS
 
-#               SPECIAL AND COMPOUND FUNCTIONS
-
-####################################################################
+    ####################################################################
 
     """
     Creates a linear scan of the given parameter (for example a DAC channel), from a START value
@@ -1415,11 +1554,12 @@ class SP1060(VisaInstrument, SP1060Reader):
     @delay - the time to pause at each point before reading any dependent parameters.
     @measured_param - the dependent parameter to measure.  Must have a get() method.
     """
+
     def scan1D(self, param, start, stop, num_points, delay, measured_param):
-        data = [] 
-        increment = (stop - start) / (num_points-1)
+        data = []
+        increment = (stop - start) / (num_points - 1)
         current = start
-        
+
         values = []
         for i in range(num_points - 1):
             values.append(current)
@@ -1432,7 +1572,6 @@ class SP1060(VisaInstrument, SP1060Reader):
             print(m)
             data.append(m)
         return data
-
 
     """
     Creates a 2D linear scan of two independent parameters.  The "outer-loop" parameter is param1, and runs through it's
@@ -1450,8 +1589,22 @@ class SP1060(VisaInstrument, SP1060Reader):
     @delay2 - the time to pause at each point of the inner scan before reading any dependent parameters.
     @measured_params_list - a list of dependent parameters. Each must have a get() method
     """
-    def scan2D(self, param1, start1, stop1, num_points1, delay1, param2, start2, stop2, num_points2, delay2, measured_params_list):
-        data = [] # return variable
+
+    def scan2D(
+        self,
+        param1,
+        start1,
+        stop1,
+        num_points1,
+        delay1,
+        param2,
+        start2,
+        stop2,
+        num_points2,
+        delay2,
+        measured_params_list,
+    ):
+        data = []  # return variable
         increment1 = (stop1 - start1) / (num_points1 - 1)
         increment2 = (stop2 - start2) / (num_points2 - 1)
 
@@ -1467,7 +1620,7 @@ class SP1060(VisaInstrument, SP1060Reader):
             values2.append(current2)
             current2 += increment2
         values2.append(stop2)
-        
+
         for val1 in values1:
             param1.set(val1)
             time.sleep(delay1)
@@ -1496,7 +1649,9 @@ class SP1060(VisaInstrument, SP1060Reader):
         elif num == 4:
             print("Mistyped")
         elif num == 5:
-            print("Writing not allowed (Ramp/Step-Generator or AWG are running on this DAC-Channel)")
+            print(
+                "Writing not allowed (Ramp/Step-Generator or AWG are running on this DAC-Channel)"
+            )
         return num
 
     def handleAWGSetErrors(code):
@@ -1538,13 +1693,14 @@ class SP1060(VisaInstrument, SP1060Reader):
         elif num == 4:
             print("Mistyped")
         return num
-    
+
     """
     After each CONTROL Write command, an error code will be returned.  '0' indicates no error. 
     If you want an interpretation printed to standard output, pass the code into this method.
     Additional actions should be taken in the code surrounding the write function.
     You should at least check for '0', to know that your program can continue running normally.
     """
+
     def handleCONTROLWriteErrors(code):
         num = int(code)
         if num == 0:
@@ -1559,25 +1715,21 @@ class SP1060(VisaInstrument, SP1060Reader):
             print("Writing not allowed")
 
 
-
-
-
-if __name__ == '__main__':    
-    dac = SP1060('LNHR_dac3', 'TCPIP0::192.168.0.5::23::SOCKET')
+if __name__ == "__main__":
+    dac = SP1060("LNHR_dac3", "TCPIP0::192.168.0.5::23::SOCKET")
     dac.ch1.volt.set(8)
     dac.ch12.volt.set(0)
     print(dac.ch12.volt.get())
     status_all = dac.query_all()
     print("Query_all:")
     print(status_all)
-    
+
     # important tests
     print("Polynomial Tests")
-    dac.set_polynomial('A', [4.938, -4.3003, 0, 20.5233])
-    print(dac.query_coefs_Polymem('A'))
+    dac.set_polynomial("A", [4.938, -4.3003, 0, 20.5233])
+    print(dac.query_coefs_Polymem("A"))
     dac.write_AWGClkPeriod("AB", 1230)
-    print('clk period: {}'.format(dac.read_AWGClkPeriod("AB")))
-
+    print("clk period: {}".format(dac.read_AWGClkPeriod("AB")))
 
     # scan tests
     time.sleep(1)
@@ -1585,46 +1737,50 @@ if __name__ == '__main__':
     dac.set_chan_voltage(10, 0)
     dac.set_chan_on(10)
     dac.set_chan_bandwidth(10, "HBW")
-    data_points = dac.scan2D(dac.ch10.volt, -3, -2, 10, 0.01, dac.ch11.volt, 0, 1, 5, 0.1, [dac.ch10.volt, dac.ch11.volt])
+    data_points = dac.scan2D(
+        dac.ch10.volt,
+        -3,
+        -2,
+        10,
+        0.01,
+        dac.ch11.volt,
+        0,
+        1,
+        5,
+        0.1,
+        [dac.ch10.volt, dac.ch11.volt],
+    )
     print(data_points)
 
-
-    
     # setup experiment, databases
-    db_name = "Untitled1.db" # Database name
-    sample_name = "no_samp" # Sample name
-    exp_name = "test experiment" # Experiment name
+    db_name = "Untitled1.db"  # Database name
+    sample_name = "no_samp"  # Sample name
+    exp_name = "test experiment"  # Experiment name
 
     db_file_path = os.path.join(os.getcwd(), db_name)
     qc.config.core.db_location = db_file_path
     qc.initialise_or_create_database_at(db_file_path)
 
-    experiment = qc.load_or_create_experiment(experiment_name = exp_name,
-                                        sample_name = sample_name)
+    experiment = qc.load_or_create_experiment(
+        experiment_name=exp_name, sample_name=sample_name
+    )
 
     # create gate parameters for scans.
     V12 = ph.GateParameter(
-                   dac.ch10.volt,
-                   name = "V1",
-                   unit = "V",
-                   value_range = (-10, 10),
-                   scaling = 1)
-    
-    V2 = ph.GateParameter(
-                   dac.ch2.volt,
-                   name = "V2",
-                   unit = "V",
-                   value_range = (-10, 10),
-                   scaling = 1)
+        dac.ch10.volt, name="V1", unit="V", value_range=(-10, 10), scaling=1
+    )
 
+    V2 = ph.GateParameter(
+        dac.ch2.volt, name="V2", unit="V", value_range=(-10, 10), scaling=1
+    )
 
     # create station
     station = qc.Station()
     station.add_component(dac)
 
     # run a scan
-    #do1d(V12, 0, -2.5, 15, 0.051)
-    
+    # do1d(V12, 0, -2.5, 15, 0.051)
+
     """
     time.sleep(2)
     print("Setting sinewave")
