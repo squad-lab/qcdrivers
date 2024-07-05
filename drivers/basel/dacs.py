@@ -8,7 +8,7 @@ from qcodes.instrument.channel import MultiChannelInstrumentParameter
 from qcodes.utils import validators as vals
 from qcodes.utils.dataset.doNd import do1d, do2d
 import qcodes as qc
-import drivers.basel_helpers.Parameterhelp as ph
+from .helpers.dacs import Parameterhelp as ph
 import os
 
 log = logging.getLogger(__name__)

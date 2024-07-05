@@ -2,24 +2,24 @@
 Forked over from course materials: [Research techniques](https://git.rwth-aachen.de/lino.visser/research-techniques-wiring-mux). Go through the examples there for a fuller explanation of the multiplexer and its use.
 
 ## The Multiplexer itself
-A complete description of the multiplexer (Mux) is given in an excerpt of the master thesis of Harsh Bhardwaj which can be found [here](docs/Bhardwaj_Master_just_mux.pdf). There also the specifications are characterized and listed. A short summary is given here.
+A complete description of the multiplexer (Mux) is given in an excerpt of the master thesis of Harsh Bhardwaj which can be found [here](docs/mux/Bhardwaj_Master_just_mux.pdf). There also the specifications are characterized and listed. A short summary is given here.
 The multiplexer is essentially a switch matrix allowing to map four (BNC) output channels to 96 input channels (in a 100 pin D-Sub). The inner shield of the mux is thereby composed of 12 (16:2) multiplexing chips connected to a Arduino Due controlling the individual switches. The multiplexing shield (which is attached to the Arduino board) is depicted in the following. The 100 pin D-Sub is located in the middle of the board with the Mux chips located around it.
-<img src="/docs/Mux_shield.JPG" alt="drawing" width="700"/>
+<img src="/docs/mux/Mux_shield.JPG" alt="drawing" width="700"/>
 
 The complete device in its housing then looks like this:<br />
-<img src="/docs/Mux_total.JPG" alt="drawing" width="700"/><br />
+<img src="/docs/mux/Mux_total.JPG" alt="drawing" width="700"/><br />
 Where the inputs are located at the top while the outputs and serial interface are on the side.
 
 Additionally, the inbuild ADC and DAC modules of the Arduino can be used to read and supply a (low resolution) voltage. These are denoted by i,o in the following. The configuration of the output channels and serial connection can be seen here:<br />
-<img src="/docs/Mux_side_view.JPG" alt="drawing" width="700"/><br />
+<img src="/docs/mux/Mux_side_view.JPG" alt="drawing" width="700"/><br />
 
 In total this makes up for a switch matrix following this schematic indicating that every output can be indidvidually connected to every input:<br />
-<img src="/docs/Mux_functional.JPG" alt="drawing" width="700"/><br />
+<img src="/docs/mux/Mux_functional.JPG" alt="drawing" width="700"/><br />
 
 ## Adapters
 
 Since the Mux only has a 96 pin D-Sub as input channels, various adapters have been designed to achieve greater compatibility with the remaining measurement environment in our group. However, the routing of the PCBs does not necessarily yield the same input pin mapping for every adapter. To compensate this transfer matrices can be used (for example for a [chainer PCB](util/mux_chainer_map.py) with which two multiplexers can be connected, doubling the number of output channels). Further matrices should be included in the same way. <br />
-<img src="/docs/Mux_chainer.JPG" alt="drawing" width="700"/><br />
+<img src="/docs/mux/Mux_chainer.JPG" alt="drawing" width="700"/><br />
 Image of the Mux chainer PCB with an alternative input pin mapping.
 
 ## Working with SCPI
