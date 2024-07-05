@@ -72,14 +72,14 @@ class Lockin(Instrument):
 
                 self.add_parameter(
                     "R",
-                    label="R",
+                    label=f"{name} R",
                     get_parser=float,
                     get_cmd=self.r_val,
                 )
 
                 self.add_parameter(
                     "P",
-                    label="P",
+                    label=f"{name} P",
                     get_parser=float,
                     get_cmd=self.p_val,
                     unit="deg",
@@ -101,7 +101,7 @@ class Lockin(Instrument):
                 for demod in range(len(self.core.demods)):
                     self.add_parameter(
                         f"R{demod}",
-                        label=f"R{demod}",
+                        label=f"{name} R{demod}",
                         get_parser=float,
                         get_cmd=self.r_val,
                         demods=demod,
@@ -109,7 +109,7 @@ class Lockin(Instrument):
 
                     self.add_parameter(
                         f"P{demod}",
-                        label=f"P{demod}",
+                        label=f"{name} P{demod}",
                         get_parser=float,
                         get_cmd=self.p_val,
                         demods=demod,
@@ -125,6 +125,8 @@ class Lockin(Instrument):
             self.sinc = self.core.sync_filter
             self.tc = self.core.time_constant
             self.order = self.filter_slope
+            self.R.label = f"{name} R"
+            self.P.label = f"{name} P"
 
     def delay(self, order, tc) -> float:
         filter_settling = {

@@ -1,32 +1,27 @@
 from qcodes import Instrument
 from qcodes.parameters import Parameter
 
-from typing import Any, Mapping
-from time import sleep
 
-
-class Conductance(Instrument):
+class DiffConductance(Instrument):
     def __init__(
         self,
-        name,
+        name: str,
         current: Parameter,
         voltage: Parameter,
         curr_ampl: Instrument,
         volt_ampl: Instrument,
-        volt_divider=1.0,
-        delay=0.1,
-        resistance=0.0,
-    ):
+        volt_divider: float = 1.0,
+        resistance: float = 0.0,
+    ) -> None:
         """Conductance instrument class for calculating the conductance from a current and voltage parameter
 
         Args:
             name: name of the qcodes instrument
-            current: current parameter or float
-            voltage: voltage parameter or float
-            curr_ampl: current amplifier
-            volt_ampl: voltage amplifier
+            current: parameter supposed to be measuring current
+            voltage: parameter supposed to be measuring voltage
+            curr_ampl: iv converter
+            volt_ampl: differential voltage amplifier
             volt_divider: voltage divider
-            delay: delay at each measurement
             resistance: resistance of the line
         """
 
@@ -36,7 +31,6 @@ class Conductance(Instrument):
 
         self.cond_quantum = physical_constants["conductance quantum"][0]
         self.line_resistance = resistance
-        self.delay = delay
         self.curr_ampl = curr_ampl.gain()
         self.volt_ampl = volt_ampl.gain() / volt_divider
 
@@ -44,11 +38,19 @@ class Conductance(Instrument):
         self.voltage = voltage
 
         self.add_parameter(
-            "value",
-            label="G",
+            "norm_value",
+            label=f"Normalized Conductance {name}",
             get_parser=float,
             get_cmd=self.get_conductance,
             unit="G0",
+        )
+
+        self.add_parameter(
+            "value",
+            label=f"Conductance {name}",
+            get_parser=float,
+            get_cmd=self.get_raw_conductance,
+            unit="S",
         )
 
     def get_current(self):
@@ -64,15 +66,17 @@ class Conductance(Instrument):
             return self.voltage() / self.volt_ampl
 
     def get_resistance(self):
-        sleep(self.delay)
         return (self.get_voltage() / self.get_current()) - self.line_resistance
 
     def get_conductance(self):
         return (1 / self.get_resistance()) * (1 / self.cond_quantum)
 
+    def get_raw_conductance(self):
+        return 1 / self.get_resistance()
+
     def get_idn(self) -> dict:
         idn_dict = {
-            "vendor": "Conductance Wrapper",
+            "vendor": "Differential Conductance Wrapper",
             "model": "1.0",
             "serial": "1.0",
             "firmware": 1,
@@ -80,18 +84,28 @@ class Conductance(Instrument):
         return idn_dict
 
 
-class Resistance(Conductance):
+class DiffResistance(DiffConductance):
     def __init__(
         self,
-        name,
-        current,
-        voltage,
-        curr_ampl,
-        volt_ampl,
-        volt_divider=1,
-        delay=0.1,
-        resistance=0,
-    ):
+        name: str,
+        current: Parameter,
+        voltage: Parameter,
+        curr_ampl: Instrument,
+        volt_ampl: Instrument,
+        volt_divider: float = 1.0,
+        resistance: float = 0.0,
+    ) -> None:
+        """Resistance instrument class for calculating the conductance from a current and voltage parameter
+
+        Args:
+            name: name of the qcodes instrument
+            current: parameter supposed to be measuring current
+            voltage: parameter supposed to be measuring voltage
+            curr_ampl: iv converter
+            volt_ampl: differential voltage amplifier
+            volt_divider: voltage divider
+            resistance: resistance of the line
+        """
         super().__init__(
             name,
             current,
@@ -99,10 +113,9 @@ class Resistance(Conductance):
             curr_ampl,
             volt_ampl,
             volt_divider,
-            delay,
             resistance,
         )
-
+        self.remove_parameter("norm_value")
         self.add_parameter(
             "value",
             label="R",
@@ -111,7 +124,88 @@ class Resistance(Conductance):
             unit="Ohm",
         )
 
+    def get_idn(self) -> dict:
+        idn_dict = {
+            "vendor": "Differential Resistance Wrapper",
+            "model": "1.0",
+            "serial": "1.0",
+            "firmware": 1,
+        }
+        return idn_dict
 
-class CurrentSource(Instrument):
-    def __init__(self, name) -> None:
+
+class Current(Instrument):
+    def __init__(
+        self,
+        name: str,
+        current: Parameter,
+        dac: Parameter,
+        vccs_ampl: float,
+        curr_ampl: Instrument,
+    ) -> None:
+        """Current instrument class for setting and getting the current
+
+        Args:
+            name: name of the qcodes instrument
+            current: parameter supposed to be measuring current
+            dac: dac parameter supposed to be setting the current
+            vccs_ampl: vccs amplification
+            curr_ampl: current amplifier
+        """
         super().__init__(name)
+        self.curr = current
+        self.vccs_ampl = vccs_ampl
+        self.curr_ampl = curr_ampl.gain()
+        self.dac_ch = dac
+
+        self.add_parameter(
+            "value",
+            label="Current",
+            get_cmd=self.get_current,
+            get_parser=float,
+            set_cmd=self.set_current,
+            unit="A",
+        )
+
+    def set_current(self, i: float) -> None:
+        self.dac_ch(i * self.vccs_ampl)
+
+    def get_current(self) -> float:
+        return self.curr() / self.curr_ampl
+
+
+class Voltage(Instrument):
+    def __init__(
+        self,
+        name: str,
+        voltage: Parameter,
+        volt_ampl: Instrument,
+        volt_divider: float = 1.0,
+    ) -> None:
+        """Voltage instrument class for setting and getting the current
+
+        Args:
+            name: name of the qcodes instrument
+            voltage: parameter supposed to be measuring current
+            volt_ampl: differential voltage amplifier
+            volt_divider: voltage divider
+        """
+        super().__init__(name)
+        self.volt = voltage
+        self.volt_ampl = volt_ampl.gain()
+        self.volt_divider = volt_divider
+
+        self.add_parameter(
+            "value",
+            label="Voltage",
+            get_cmd=self.get_voltage,
+            get_parser=float,
+            set_cmd=self.set_voltage,
+            unit="V",
+        )
+
+    def set_voltage(self, v: float) -> None:
+        self.volt(v) / self.volt_divider
+
+    def get_voltage(self) -> float:
+        return self.volt() / self.volt_ampl
