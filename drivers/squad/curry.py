@@ -1,9 +1,6 @@
 from qcodes import Instrument
 from qcodes.parameters import Parameter
 
-from typing import Any, Mapping
-from time import sleep
-
 
 class DiffConductance(Instrument):
     def __init__(
@@ -41,11 +38,19 @@ class DiffConductance(Instrument):
         self.voltage = voltage
 
         self.add_parameter(
-            "value",
-            label="G",
+            "norm_value",
+            label=f"Normalized Conductance {name}",
             get_parser=float,
             get_cmd=self.get_conductance,
             unit="G0",
+        )
+
+        self.add_parameter(
+            "value",
+            label=f"Conductance {name}",
+            get_parser=float,
+            get_cmd=self.get_raw_conductance,
+            unit="S",
         )
 
     def get_current(self):
@@ -66,9 +71,12 @@ class DiffConductance(Instrument):
     def get_conductance(self):
         return (1 / self.get_resistance()) * (1 / self.cond_quantum)
 
+    def get_raw_conductance(self):
+        return 1 / self.get_resistance()
+
     def get_idn(self) -> dict:
         idn_dict = {
-            "vendor": "Conductance Wrapper",
+            "vendor": "Differential Conductance Wrapper",
             "model": "1.0",
             "serial": "1.0",
             "firmware": 1,
@@ -107,7 +115,7 @@ class DiffResistance(DiffConductance):
             volt_divider,
             resistance,
         )
-
+        self.remove_parameter("norm_value")
         self.add_parameter(
             "value",
             label="R",
@@ -115,6 +123,15 @@ class DiffResistance(DiffConductance):
             get_cmd=super().get_resistance,
             unit="Ohm",
         )
+
+    def get_idn(self) -> dict:
+        idn_dict = {
+            "vendor": "Differential Resistance Wrapper",
+            "model": "1.0",
+            "serial": "1.0",
+            "firmware": 1,
+        }
+        return idn_dict
 
 
 class Current(Instrument):
@@ -144,16 +161,16 @@ class Current(Instrument):
         self.add_parameter(
             "value",
             label="Current",
-            get_cmd=self._get_current,
+            get_cmd=self.get_current,
             get_parser=float,
-            set_cmd=self._set_current,
+            set_cmd=self.set_current,
             unit="A",
         )
 
-    def _set_current(self, dac_v: float) -> None:
-        self.dac_ch(dac_v * self.vccs_ampl)
+    def set_current(self, i: float) -> None:
+        self.dac_ch(i * self.vccs_ampl)
 
-    def _get_current(self) -> float:
+    def get_current(self) -> float:
         return self.curr() / self.curr_ampl
 
 
@@ -181,14 +198,14 @@ class Voltage(Instrument):
         self.add_parameter(
             "value",
             label="Voltage",
-            get_cmd=self._get_voltage,
+            get_cmd=self.get_voltage,
             get_parser=float,
-            set_cmd=self._set_voltage,
+            set_cmd=self.set_voltage,
             unit="V",
         )
 
-    def _set_voltage(self, dac_v: float) -> None:
-        self.volt(dac_v) / self.volt_divider
+    def set_voltage(self, v: float) -> None:
+        self.volt(v) / self.volt_divider
 
-    def _get_voltage(self) -> float:
+    def get_voltage(self) -> float:
         return self.volt() / self.volt_ampl
