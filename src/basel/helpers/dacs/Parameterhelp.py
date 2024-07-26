@@ -8,7 +8,7 @@ from qcodes.instrument.parameter import (
 )
 from qcodes.utils.validators import Numbers
 from typing import Optional, List
-from drivers.basel_helpers.AWGhelp import PulseParameter
+from .AWGhelp import PulseParameter
 
 
 class GateParameter(Parameter):

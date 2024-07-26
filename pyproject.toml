@@ -21,6 +21,10 @@ dependencies = [
   "qcodes",
 ]
 
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src"]
+namespaces = false
 
 [project.urls]
 "Homepage" = "https://gitlab.com/squad-lab/measurements/drivers"
