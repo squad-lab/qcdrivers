@@ -1,5 +1,5 @@
 /*
-  Modified AD75019.cpp for 24*24 switching array 
+  AD75019.cpp for 24*24 switching array 
 
   where 4 inputs and 4 outputs have been disabled (set to constant 0)
   analogue inputs and outputs are daisy chained
@@ -9,7 +9,6 @@
   Library for the Analog Devices AD75019 Crosspoint Switch
 
   Copyright (c) 2024, Dan Mowehhuk (danmowehhuk@gmail.com)
-  Modified by Xingyue Luo 2024
   All rights reserved.
 */
 
@@ -118,24 +117,32 @@ void AD75019::flush() {
 
     clearDisabledBits();
 
+/** 
 //Initialisation, better kept this 
     _digitalWriteCallback(_sinPinNumber, LOW);
     for (int i = 0; i < 256 * 4; i++) {
         _digitalWriteCallback(_sclkPinNumber, HIGH);
+        _digitalWriteCallback(_sclkPinNumber, HIGH);
+        _digitalWriteCallback(_sclkPinNumber, LOW);
         _digitalWriteCallback(_sclkPinNumber, LOW);
     }
+
+    _digitalWriteCallback(_pclkPinNumber, LOW);
+    _digitalWriteCallback(_pclkPinNumber, HIGH);
+   */ 
+
 // Uploading data
     for (int i = 0; i < 128; i++) { // 128 bytes = 1024 bits
         for (int bit = 7; bit >= 0; bit--) {
             bool bitValue = bitRead(_configBuffer[i], bit);
             _digitalWriteCallback(_sinPinNumber, bitValue);
             _digitalWriteCallback(_sclkPinNumber, HIGH);
+            _digitalWriteCallback(_sclkPinNumber, HIGH);
             _digitalWriteCallback(_sclkPinNumber, LOW);
         }
     }
 
     _digitalWriteCallback(_pclkPinNumber, LOW);
-    delayMicroseconds(1); // Ensure the pulse is noticed
     _digitalWriteCallback(_pclkPinNumber, HIGH);
 }
 
