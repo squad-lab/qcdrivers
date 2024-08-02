@@ -1,1 +1,0 @@
-from .fridges import fridges
