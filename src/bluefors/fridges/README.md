@@ -12,7 +12,7 @@ This pip package has only been tested with `python>=3.7`. Please make sure to up
 
 Installation is supported using the gitlab instance of the project.
 ```
-pip install git+ssh://git@gitlab.com/squad-lab/bfutils.git
+pip install git+ssh://git@gitlab.com/squad-lab//measurements/drivers.git
 ```
 
 ## Usage
