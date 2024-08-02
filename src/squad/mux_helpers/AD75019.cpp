@@ -117,7 +117,7 @@ void AD75019::flush() {
 
     clearDisabledBits();
 
-
+/** 
 //Initialisation, better kept this 
     _digitalWriteCallback(_sinPinNumber, LOW);
     for (int i = 0; i < 256 * 4; i++) {
@@ -129,7 +129,7 @@ void AD75019::flush() {
 
     _digitalWriteCallback(_pclkPinNumber, LOW);
     _digitalWriteCallback(_pclkPinNumber, HIGH);
-    
+   */ 
 
 // Uploading data
     for (int i = 0; i < 128; i++) { // 128 bytes = 1024 bits
