@@ -1,0 +1,7 @@
+qcodes
+pyvisa
+functiontool
+numpy
+matplotlib.pyplot
+matplotlib.colors
+time 

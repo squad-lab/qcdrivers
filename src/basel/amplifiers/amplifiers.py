@@ -1,8 +1,8 @@
-from qcodes.instrument import VisaInstrument
-from qcodes import validators as vals
-import numpy as np
-
 from typing import Any, Optional
+
+import numpy as np
+from qcodes import validators as vals
+from qcodes.instrument import VisaInstrument
 
 
 class BaselSP1004a(VisaInstrument):

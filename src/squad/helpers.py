@@ -1,10 +1,9 @@
-from qcodes import Instrument
-
 from time import sleep
-
 from typing import Any, Optional
 
+from qcodes import Instrument
 from qcodes import validators as vals
+
 
 class ShellInstrument(Instrument):
     def __init__(self, name: str, parameters: dict, **kwargs) -> None:
@@ -37,7 +36,7 @@ class Lockin(Instrument):
         super().__init__(f"wrapper_{name}", **kwargs)
         if serial:
             try:
-                import zhinst.qcodes
+                pass
             except ImportError:
                 raise ImportError(f"Please install zhinst-qcodes to use the {device}")
 
@@ -178,6 +177,7 @@ class Delay(Instrument):
         self.num_time += 1
         sleep(self.delay)
 
+
 class DummyBaselSP1004a(Instrument):
     """
     A driver for Dummy Basel Diffamp's (SP1004a) Remote Instrument - Model SP1004a.
@@ -196,7 +196,6 @@ class DummyBaselSP1004a(Instrument):
         self.gain_value = None
         self.filter_value = None
 
-
         self.add_parameter(
             "gain",
             label="Gain",
@@ -213,7 +212,6 @@ class DummyBaselSP1004a(Instrument):
             set_cmd=self._set_filter,
             vals=vals.Enum(100, 300, 1000, 3000, 10e3, 30e3, 100e3, 300e3, 1e6),
         )
-
 
     def get_idn(self) -> dict[str, Optional[str]]:
         vendor = "SQUAD Lab"
@@ -238,7 +236,7 @@ class DummyBaselSP1004a(Instrument):
 
     def _get_filter(self) -> str:
         return self.filter_value
-    
+
 
 class DummyBaselSP983a(Instrument):
     """
@@ -258,7 +256,6 @@ class DummyBaselSP983a(Instrument):
         self.gain_value = None
         self.filter_value = None
 
-
         self.add_parameter(
             "gain",
             label="Gain",
@@ -275,7 +272,6 @@ class DummyBaselSP983a(Instrument):
             set_cmd=self._set_filter,
             vals=vals.Enum(30, 100, 300, 1000, 3000, 10e3, 30e3, 100e3, 1e6),
         )
-
 
     def get_idn(self) -> dict[str, Optional[str]]:
         vendor = "SQUAD Lab"
@@ -300,4 +296,3 @@ class DummyBaselSP983a(Instrument):
 
     def _get_filter(self) -> str:
         return self.filter_value
-

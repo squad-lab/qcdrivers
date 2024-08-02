@@ -4,14 +4,14 @@ Affiliation: Forschungszentrum Jülich GmbH
 Updated: 22-07-2023
 """
 
-from qcodes.instrument.base import Instrument
-import pandas as pd
-import numpy as np
-
 from datetime import datetime, timedelta
 from functools import partial
 from pathlib import Path
+
+import numpy as np
+import pandas as pd
 import requests
+from qcodes.instrument.base import Instrument
 
 
 class BlueFors(Instrument):

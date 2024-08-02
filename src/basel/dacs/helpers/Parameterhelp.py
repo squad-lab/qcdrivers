@@ -1,13 +1,15 @@
-import numpy as np
 import time
+from typing import List, Optional
+
+import numpy as np
 from qcodes.instrument.parameter import (
+    ManualParameter,
     MultiParameter,
     Parameter,
     ScaledParameter,
-    ManualParameter,
 )
 from qcodes.utils.validators import Numbers
-from typing import Optional, List
+
 from .AWGhelp import PulseParameter
 
 

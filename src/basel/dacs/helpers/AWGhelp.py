@@ -1,9 +1,10 @@
 # Author: Simon Geyer
 # Date:   12/01/2023
 # Place:  Basel, Switzerland
-import numpy as np
-import matplotlib.pyplot as plt
 import typing
+
+import matplotlib.pyplot as plt
+import numpy as np
 
 
 class PulseParameter:
