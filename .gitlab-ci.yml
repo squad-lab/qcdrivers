@@ -30,7 +30,7 @@ black:
 flake8:
   extends: .lint_generic
   script:
-    - autoflake --remove-all-unused-imports --in-place --recursive src/
+    - autoflake --remove-all-unused-imports --in-place --ignore-init-module-imports --recursive src/
   after_script:
     - git add .
     - git commit -m "flake8 update"
