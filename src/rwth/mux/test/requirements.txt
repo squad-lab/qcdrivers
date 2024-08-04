@@ -1,6 +1,0 @@
-git+ssh://git@gitlab.com/squad-lab//measurements/drivers.git
-qcodes
-pyvisa
-functiontool
-numpy
-matplotlib
