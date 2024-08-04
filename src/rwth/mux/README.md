@@ -39,7 +39,7 @@ We provide a description of how to use our driver. The Muxi class is initialized
 
 For more detailed examples, please consult [the test notebook](./test/mux_test.ipynb)
 
-QCoDeS Parameters Description:
+## QCoDeS Parameters Description:
     
 1. `C{pin}_{output}`: Connection between a specific input pin and an output channel. Values can be 0  (disconnected) or 1 (connected).
 2. `output_channel_{n}`: Where n is the output channel number. Returns the list of input pins connected to that output.
@@ -47,3 +47,6 @@ QCoDeS Parameters Description:
 4. `DAC`: DAC voltage. Can be set within a specified range.
 5. `ADC`: ADC voltage. Read-only.
 6. `getADCAverage(N_samples)`: Returns the average value of ADC over a specified number of samples.
+
+## Authors
+Original designed and made by Harsh Bharadwaj as part of his MSc thesis at RWTH Aachen University, updated by Xingyue Luo
