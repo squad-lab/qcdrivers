@@ -1,3 +1,9 @@
+"""
+Author: Harsh Bhardwaj, Xingyue Luo
+Affiliation: Forschungszentrum Julich GmbH, Imperial College London
+Updated: 24-07-2024
+"""
+
 from qcodes import VisaInstrument, validators as vals
 from functools import partial
 import numpy as np
@@ -7,12 +13,6 @@ import matplotlib.colors as colors
 import time
 import pyvisa
 
-"""
-Author: Hashes Bhardwaj, Xingyue Luo
-Affiliation: Forschungszentrum Julich GmbH
-Updates: 24-07-2024
-
-"""
 """
 Creating a colourmap with name 'switch'
 color poits: white, red, green 
@@ -29,7 +29,7 @@ switch = LinearSegmentedColormap.from_list(
 divnorm = colors.TwoSlopeNorm(vmin=-1, vcenter=0, vmax=1)
 
 """
-define list of valid pins, (49 and 50 are not in use)
+Define list of valid pins, (49 and 50 are not in use)
 number of input pins and output channels
 """
 PINS = [i for i in range(1, 99) if i != 49 and i != 50]  # valid input pins on dsub
@@ -127,7 +127,7 @@ class Muxi(VisaInstrument):
 
     def send_command(self, command):
         """
-        send command to multiplexer with proper timing
+        Send command to multiplexer with proper timing
 
         This function clear the VISA handle's input and output buffers,
         then it send a command and return the response from multiplexer
@@ -181,36 +181,15 @@ class Muxi(VisaInstrument):
 
     def reset(self):
         """
-        set all the connections to 0
+        Set all the connections to 0
         """
         response = self.send_command("*RST")
         time.sleep(0.1)
         return response
 
-    """
-        for OUT in OUTS:
-                for PIN in PINS:
-                    self.switch(PIN, OUT, 0)
-                    time.sleep(0.1)  # Ensure each command is processed
-        
-        first_chip_pins = list(range(1, 17))
-        for OUT in OUTS:
-            for PIN in first_chip_pins:
-                result = self.switch(PIN, OUT, 0)
-                time.sleep(0.05)  # Ensure each command is processed
-        """
-
-    """
-    def full_reset(self):
-        for OUT in OUTS:
-            self.clear_output_channel(OUT)
-        for PIN in PINS:
-            self.clear_input_channel(PIN)
-            """
-
     def status(self, PIN, OUT):
         """
-        checking the state of connections
+        Checking the state of connections
 
         This function send the query about the state of connection and receive response from multiplexer
         i.e. MUX:STATUS? 10, 2
@@ -268,10 +247,7 @@ class Muxi(VisaInstrument):
             plt.tight_layout()
             plt.grid()
             plt.show()
-            """
-            mngr = plt.get_current_fig_manager()
-            mngr.window.setGeometry(177, 196, 1655, 390)
-            """
+
         return switchMatrix
 
     def pins_connected_to_channel(self, OUT):
@@ -347,14 +323,6 @@ class Muxi(VisaInstrument):
             self.send_command(command)
         else:
             raise ValueError("Invalid output switch list!")
-
-    """
-    def clear_output_channel(self, OUT):
-        self.connect_multiple_pins_to_channel(OUT, [0] * 96)
-
-    def clear_input_channel(self, PIN):
-        self.connect_multiple_channels_to_pin(PIN, [0] * 4)
-    """
 
     def setDAC(self, voltage):
         """
