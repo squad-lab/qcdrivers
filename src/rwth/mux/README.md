@@ -1,9 +1,9 @@
 # Hash's Multiplexer
-QCoDeS and Python implementation of control for a multiplexer. The device is comprised of a PCA9544ADWR connecting to twelve MAX14661 (slave) ICs. It is controlled and interfaced via Arduino Due. This package allows for full control of the multiplexer through the VISA interface.
+QCoDeS and Python implementation of control for a room temperature, DC multiplexer. The device is comprised of a PCA9544ADWR connected to twelve MAX14661 (slave) ICs. It is controlled and interfaced via Arduino Due. This package allows for full control of the multiplexer through the VISA interface.
 
 Features of this driver include:
 
-1. Reset all the connections to 0 (all switches are open)
+1. Reset all connections to 0 (all switches open)
 2. Setting and monitoring connections between multiple inputs and outputs
 3. Querying and setting DAC and ADC values, including average value for ADC
 
@@ -12,7 +12,11 @@ This pip package has only been tested with 'python>=3.7'. Please make sure to up
 
 Installation is supported using the GitLab instance of the project.
 ```
-pip install git+ssh://git@gitlab.com/squad-lab/muxiutils.git
+pip install git+ssh://git@gitlab.com/squad-lab//measurements/drivers.git
+```
+Import this driver with:
+```python
+from rwth.mux import Muxi
 ```
 
 ## Usage
@@ -20,24 +24,17 @@ For a detailed description on how QCoDeS drivers work, please look at their docu
 
 We provide a description of how to use our driver. The Muxi class is initialized with a few parameters that need to be set:
 
-1. name: A name for the multiplexer. This is used by QCoDeS to identify the device.
-2. address: The address of the device.
-3. BAUD: Baud rate for communication.
+1. `name`: A name for the multiplexer. This is used by QCoDeS to identify the device.
+2. `address`: The VISA address of the device.
+3. `BAUD`: Baud rate for communication. Normally set to 115200.
 
 example usages are shown in mux_test.ipynb
 
-QCoDeS Parameters Description
-
+QCoDeS Parameters Description:
     
-1. C{pin}_{output}: Connection between a specific input pin and an output channel. Values can be 0  (disconnected) or 1 (connected).
-    
-2. output_channel_{n}: Where n is the output channel number. Returns the list of input pins connected to that output.
-    
-3. input_channel_{n}: Where n is the input pin number. Returns the list of output channels connected to that input.
-    
-4. DAC: DAC voltage. Can be set within a specified range.
-    
-5. ADC: ADC voltage. Read-only.
-    
-6. getADCAverage(N_samples): Returns the average value of ADC over a specified number of samples.
-
+1. `C{pin}_{output}`: Connection between a specific input pin and an output channel. Values can be 0  (disconnected) or 1 (connected).
+2. `output_channel_{n}`: Where n is the output channel number. Returns the list of input pins connected to that output.
+3. `input_channel_{n}`: Where n is the input pin number. Returns the list of output channels connected to that input.
+4. `DAC`: DAC voltage. Can be set within a specified range.
+5. `ADC`: ADC voltage. Read-only.
+6. `getADCAverage(N_samples)`: Returns the average value of ADC over a specified number of samples.
