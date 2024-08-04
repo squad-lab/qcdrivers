@@ -1,5 +1,7 @@
-# Hash's Multiplexer
+# RWTH Multiplexer
 QCoDeS and Python implementation of control for a room temperature, DC multiplexer. The device is comprised of a PCA9544ADWR connected to twelve MAX14661 (slave) ICs. It is controlled and interfaced via Arduino Due. This package allows for full control of the multiplexer through the VISA interface.
+
+Original project part of the thesis from Harsh Bharadwaj, RWTH Aachen University. Updated as part of the ML4Q internship project for Xingyue Luo.
 
 Features of this driver include:
 
@@ -8,7 +10,7 @@ Features of this driver include:
 3. Querying and setting DAC and ADC values, including average value for ADC
 
 # Installation
-This pip package has only been tested with 'python>=3.7'. Please make sure to update your Python installation before proceeding with the installation. It is also always a good idea to keep 'pip' and 'setuptools' updated to prevent arbitrary installation issues. For the full list of app dependencies, check 'requirements.txt'. A separate 'venv' testing environment is suggested while the package is in production, and the tests are being built. Once the project is out of development and is pushed onto 'qcodes_contrib_drivers', this installation will not be needed.
+This pip package has only been tested with 'python>=3.7'. Please make sure to update your Python installation before proceeding with the installation. It is also always a good idea to keep 'pip' and 'setuptools' updated to prevent arbitrary installation issues. For the full list of app dependencies, check 'requirements.txt'. A separate 'venv' testing environment is suggested while the package is in production, and the tests are being built.
 
 Installation is supported using the GitLab instance of the project.
 ```
