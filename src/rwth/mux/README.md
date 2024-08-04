@@ -1,5 +1,14 @@
 # Hash's Multiplexer
-QCoDeS and Python implementation of control for a multiplexer. The device is comprised of a PCA9544ADWR connecting to twelve MAX14661 (slave) ICs. It is controlled and interfaced via Arduino Due. This package allows for full control of the multiplexer through the VISA interface.
+QCoDeS and Python implementation of control for a multiplexer. The device is comprised of a PCA9544ADWR connecting to twelve MAX14661 (slave) ICs. It is designed as a plug-on shield controlled and interfaced via Arduino Due. This package allows for full control of the multiplexer through the VISA interface. [1]
+
+MAX14661:
+The MAX14661 ia a dual-channel analog multiplexer controlled serially, enabling any of its 16 pins to connect to the either common pin in any combination simultaneously (16:2). Each switch is independently controlled via I2C. It allows ± 5.5V signals with a single supply voltage ranging from +1.6V to + 5.5V. [2]
+
+PCA9544A: 
+The PCA9544A is a 4-channel, bidirectional tranlating multiplexer that is controlled via I2C bus. It enables the SCL/SDA upstream pair to connect to four downstream channels (each channel is able to communicate with 4 device). [3]
+
+Hardware:
+The 96:4 multiplexing is achieved by using three channels of the PCA9544A to interface with twelve MAX14661 devices via the I2C protocol. The input is a 100-pin D-Sub connector located at the top of the device, while the four output channels are connected to female BNC connectors.[1]
 
 Features of this driver include:
 
@@ -41,3 +50,7 @@ QCoDeS Parameters Description
     
 6. getADCAverage(N_samples): Returns the average value of ADC over a specified number of samples.
 
+# Referencing 
+[1] H.Bhardwaj.() Multiplxer. 
+[2] Maxim Integrated Products.(2015) Beyond-the-Rails 16:2 Multiplexer: MAX14661. https://www.analog.com/media/en/technical-documentation/data-sheets/MAX14661.pdf[Accessed 05th July 2024]
+[3] Texas Instruments.(2023) PCA9544A Low Voltage 4-Channel I2C and SMBus Multiplexer With Interrupt Logic. https://www.ti.com/lit/ds/symlink/pca9544a.pdf?ts=1722720240987&ref_url=https%253A%252F%252Fwww.google.com%252F [Accessed 06th July 2024]
