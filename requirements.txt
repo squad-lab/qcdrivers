@@ -1,5 +1,0 @@
-qcodes
-pyvisa
-scipy
-numpy
-matplotlib
