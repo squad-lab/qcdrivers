@@ -16,9 +16,13 @@ classifiers = [
     "License :: OSI Approved :: GNU Affero General Public License v3",
     "Operating System :: OS Independent",
 ]
-keywords = ["qcodes"]
+keywords = ["qcodes", "drivers", "instruments", "SQUAD"]
 dependencies = [
   "qcodes",
+  "pyvisa",
+  "scipy",
+  "numpy",
+  "matplotlib",
 ]
 
 [project.urls]

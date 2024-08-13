@@ -7,20 +7,12 @@ New features of this driver include:
 3. Support for setting temperatures with the PID controller provided by the BFTC
 4. Support for setting the parameters of the PID controller
 
-## Installation
-This pip package has only been tested with `python>=3.7`. Please make sure to update your python installation before going on with installation. It is also always a good idea to keep `pip` and `setuptools` updated to prevent arbitrary install issues. For the full list of app dependencies, check `requirements.txt`. Separate `venv` testing environment is suggested while the package is in production, and the tests are being built. Once the project is out of development and is pushed onto `qcodes_contrib_drivers`, this installation will not be needed.
-
-Installation is supported using the gitlab instance of the project.
-```
-pip install git+ssh://git@gitlab.com/squad-lab//measurements/drivers.git
-```
-
 ## Usage
 For a detailed description on how QCoDeS drivers work, please look at their documentation. There are a lot of good examples to look at on the [QCoDeS](https://qcodes.github.io/Qcodes/examples/index.html) website.
 
 What we provide is a description of how to use our driver. The `BlueFors` class is initialized with a few parameters that need to be set:
 1. `name`: A name for the fridge. This is used by QCoDeS to identify the fridge
-2. log_location: Location of the BlueFors log files
+2. `log_location`: Location of the BlueFors log files
 3. `bftc_ip`: IP Address of the BFTC as a string
 4. `bftc_port`: Port of the BFTC as an integer
 5. `fse_ip`: IP Address of the FSE as a string
@@ -48,6 +40,3 @@ What we provide is a description of how to use our driver. The `BlueFors` class 
 4. `temperature`: Returns a dictionary of all the temperatures in the fridge.
 5. `h_{name}`: Where n is the name of the heater according to the `heater_channels` dictionary. Returns the heater power in watt. The setpoint can also be set through this parameter.
 6. `pid_{name}`: Where n is the name of the heater according to the `heater_channels` dictionary. Returns a dictionary of the PID parameters for the heater. The values for P, I, D can also be set through this parameter.
-
-## 🚧 Under Construction 🚧
-* Watcher and logger for [Graphana](https://grafana.com/) is being built. This will allow for real time monitoring of the fridge parameters, and will allow for easy access to the fridge data.
