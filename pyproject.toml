@@ -1,6 +1,6 @@
 [build-system]
-requires = ["setuptools"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [project]
 name = "drivers"
@@ -10,7 +10,7 @@ authors = [
 ]
 description = "Drivers for various instruments used in the SQUAD lab"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.11"
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: GNU Affero General Public License v3",
@@ -20,11 +20,6 @@ keywords = ["qcodes"]
 dependencies = [
   "qcodes",
 ]
-
-[tool.setuptools.packages.find]
-where = ["."]
-include = ["src"]
-namespaces = false
 
 [project.urls]
 "Homepage" = "https://gitlab.com/squad-lab/measurements/drivers"
