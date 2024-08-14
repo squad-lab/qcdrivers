@@ -27,8 +27,8 @@ N_y = len(y_pins)
 class AD75019Controller(VisaInstrument):
     """
     The AD75019Controller class is used to control an AD75019 crosspoint switch
-    using a serial interface via pyVISA and QCoDeS. This class provides methods for 
-    configuring the switch, switching connections, querying connection statuses, 
+    using a serial interface via pyVISA and QCoDeS. This class provides methods for
+    configuring the switch, switching connections, querying connection statuses,
     and visualizing the switch matrix status.
     """
 
@@ -57,8 +57,12 @@ class AD75019Controller(VisaInstrument):
         self.switch_matrix = np.zeros((32, 32), dtype=int)
 
         # Define the valid X and Y pins (excluding the disabled range)
-        self.x_pins = [i for i in range(32) if i not in {12, 13, 14, 15, 28, 29, 30, 31}]
-        self.y_pins = [j for j in range(32) if j not in {12, 13, 14, 15, 28, 29, 30, 31}]
+        self.x_pins = [
+            i for i in range(32) if i not in {12, 13, 14, 15, 28, 29, 30, 31}
+        ]
+        self.y_pins = [
+            j for j in range(32) if j not in {12, 13, 14, 15, 28, 29, 30, 31}
+        ]
 
     def configure_pins(self, pclk_pin, sclk_pin, sin_pin):
         """
@@ -105,11 +109,11 @@ class AD75019Controller(VisaInstrument):
             return "Route skipped: disabled range"
 
         # Construct the command to add the route
-        command = f'SWITCH {x},{y}'
+        command = f"SWITCH {x},{y}"
         self.send_command(command)
 
         # Flush the configuration to apply the changes
-        response = self.send_command('FLUSH')
+        response = self.send_command("FLUSH")
 
         return response
 
@@ -127,6 +131,7 @@ class AD75019Controller(VisaInstrument):
         command = f"MUX:STATUS? {PIN},{OUT}"
         response = self.send_command(command)
         return int(response) if response else None
+
     '''
     def check_status(self):
         """
@@ -147,6 +152,7 @@ class AD75019Controller(VisaInstrument):
                 if state is not None:
                     self.switch_matrix[PIN, OUT] = state
     '''
+
     def reset(self):
         """
         Reset the AD75019 switch to its default state.
@@ -171,7 +177,7 @@ class AD75019Controller(VisaInstrument):
         Returns:
             configuration matrix
         """
-        self.send_command('PRINT')
+        self.send_command("PRINT")
         response = self.visa_handle.read()
         return response
 
@@ -199,7 +205,9 @@ class AD75019Controller(VisaInstrument):
         for i in range(N_x):
             for j in range(N_y):
                 if (i, j) not in switchMatrix:
-                    switchMatrix[i, j] = 1  # Example logic; replace with actual switch status check
+                    switchMatrix[i, j] = (
+                        1  # Example logic; replace with actual switch status check
+                    )
 
         if plot:
             fig, ax = plt.subplots()
@@ -223,7 +231,7 @@ class AD75019Controller(VisaInstrument):
             plt.show()
 
         return switchMatrix
-    
+
     '''
     def clear(self):
         """
@@ -237,6 +245,7 @@ class AD75019Controller(VisaInstrument):
         """
         self.send_command('CLEAR')
     '''
+
     def close(self):
         """
         Close the VISA handle for the instrument.
