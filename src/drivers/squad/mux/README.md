@@ -36,6 +36,5 @@ For example usages please check AD75019_test
 
 
 # Reference 
-[1] Analog Devices.(2018) 16*16 Crosspoint
-Switch Array: AD75019. https://www.analog.com/media/en/technical-documentation/data-sheets/ad75019.pdf [Accessed 14th June 2024]
+[1] Analog Devices.(2018) 16*16 Crosspoint Switch Array: AD75019. https://www.analog.com/media/en/technical-documentation/data-sheets/ad75019.pdf [Accessed 14th June 2024]
 
