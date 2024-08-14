@@ -8,16 +8,6 @@
   All rights reserved.
 
 */
-/*
-
-  AD75019.h
-
-  Library for the Analog Devices AD75019 Crosspoint Switch
-
-  Copyright (c) 2024, Dan Mowehhuk (danmowehhuk@gmail.com)
-  All rights reserved.
-
-*/
 
 #ifndef AD75019_24_h
 #define AD75019_24_h
@@ -73,6 +63,7 @@ class AD75019_24 {
      * y - a number from 0-15
      */
     void addRoute(uint8_t x, uint8_t y);
+    void removeRoute(uint8_t x, uint8_t y);
 
     /*
      * Returns true if the X pin is routed to the Y pin in the configuration

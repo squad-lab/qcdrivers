@@ -1,10 +1,10 @@
-#include "AD75019.h"
+#include "AD75019_24.h"
 
 void setup() {
     Serial.begin(9600);
     while (!Serial);
 
-    AD75019 cpSwitch(24, 21, 20);
+    AD75019_24 cpSwitch(52, 21, 20);
 
     // Initialize the AD75019
     if (!cpSwitch.begin()) {
