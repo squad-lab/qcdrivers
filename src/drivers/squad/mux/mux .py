@@ -1,11 +1,9 @@
-from qcodes import VisaInstrument, validators as vals
-from functools import partial
+from qcodes import VisaInstrument
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap
 import matplotlib.colors as colors
 import time
-import pyvisa
 
 # Creating a colourmap with name 'switch'
 # Color points: white, red, green
