@@ -8,23 +8,13 @@
   All rights reserved.
 
 */
-/*
 
-  AD75019.h
-
-  Library for the Analog Devices AD75019 Crosspoint Switch
-
-  Copyright (c) 2024, Dan Mowehhuk (danmowehhuk@gmail.com)
-  All rights reserved.
-
-*/
-
-#ifndef AD75019_h
-#define AD75019_h
+#ifndef AD75019_24_h
+#define AD75019_24_h
 
 #include <stdint.h>
 
-class AD75019 {
+class AD75019_24 {
 
   public:
 
@@ -36,7 +26,7 @@ class AD75019 {
      * sclkPinNumber - connect to SCLK
      * sinPinNumber  - connect to SIN
      */
-    AD75019(uint8_t pclkPinNumber, uint8_t sclkPinNumber, uint8_t sinPinNumber);
+    AD75019_24(uint8_t pclkPinNumber, uint8_t sclkPinNumber, uint8_t sinPinNumber);
 
 
     /*
@@ -46,7 +36,7 @@ class AD75019 {
      * as the MCP23017.
      */
     typedef void (*voidFuncCallback_t)(uint8_t i, uint8_t v);
-    AD75019(uint8_t pclkPinNumber, uint8_t sclkPinNumber, uint8_t sinPinNumber, 
+    AD75019_24(uint8_t pclkPinNumber, uint8_t sclkPinNumber, uint8_t sinPinNumber, 
         voidFuncCallback_t pinModeCallback, voidFuncCallback_t digitalWriteCallback);
 
     /*
@@ -63,7 +53,7 @@ class AD75019 {
      *    between 0-15 containing no repeated values. The array elements
      *    correspond to the actual X and Y pins on the AD75019.
      */
-    bool begin(uint8_t xPinMapping[16], uint8_t yPinMapping[16]);
+    bool begin(uint8_t xPinMapping[32], uint8_t yPinMapping[32]);
 
     /*
      * Update the configuration buffer adding a route between the specified X 
@@ -73,6 +63,7 @@ class AD75019 {
      * y - a number from 0-15
      */
     void addRoute(uint8_t x, uint8_t y);
+    void removeRoute(uint8_t x, uint8_t y);
 
     /*
      * Returns true if the X pin is routed to the Y pin in the configuration
@@ -100,10 +91,10 @@ class AD75019 {
 
   private:
     // Only parameterized constructors may be used
-    AD75019();
+    AD75019_24();
 
     // Disable copy constructor since copies would reference the same physical pins
-    AD75019(AD75019 &t);
+    AD75019_24(AD75019_24 &t);
 
     // Functions using the _state bit vector
     void setBegun(bool b);
@@ -121,11 +112,11 @@ class AD75019 {
     voidFuncCallback_t _pinModeCallback = NULL;
     voidFuncCallback_t _digitalWriteCallback = NULL;
     
-    uint8_t _xPinMapping[16] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
-    uint8_t _yPinMapping[16] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
+    uint8_t _xPinMapping[32] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31 };
+    uint8_t _yPinMapping[32] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31 };
 
     // Y is the array index, X is the bit position (0 on the right)
-    uint16_t _configBuffer[16] = {0};
+    uint32_t _configBuffer[32] = {0};
 
 };
 
