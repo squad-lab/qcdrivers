@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap
 import matplotlib.colors as colors
 import time
+import pyvisa
 
 # Creating a color map with name 'switch'
 # Color points: white, red, green
@@ -47,9 +48,10 @@ class Muxi(VisaInstrument):
         """
         super().__init__(name, address, **kwargs)
         self.visa_handle.baud_rate = baud_rate
-        self.visa_handle.read_termination = "\r\n"
-        self.visa_handle.write_termination = "\n"
-        self.visa_handle.timeout = 20000  # 20000 milliseconds
+        self.visa_handle.write_termination = "\n"  # Correctly set the write termination
+        self.visa_handle.read_termination = "\r\n"  # Correctly set the read termination
+
+        self.visa_handle.timeout = 2000
 
         self.connect_message()
         self.visa_handle.clear()
@@ -64,34 +66,28 @@ class Muxi(VisaInstrument):
             j for j in range(32) if j not in {12, 13, 14, 15, 28, 29, 30, 31}
         ]
 
-    def configure_pins(self, pclk_pin, sclk_pin, sin_pin):
-        """
-        Configure the control pins for the AD75019 switch on Arduino.
-
-        Args:
-            pclk_pin (int): The pin number for the PCLK signal.
-            sclk_pin (int): The pin number for the SCLK signal.
-            sin_pin (int): The pin number for the SIN signal.
-
-        Returns:
-            None
-        """
-        self.pclk_pin = pclk_pin
-        self.sclk_pin = sclk_pin
-        self.sin_pin = sin_pin
-
     def send_command(self, command):
         """
-        Send a command to the AD75019 switch via the VISA interface.
+        Send command to multiplexer with proper timing
+
+        This function clear the VISA handle's input and output buffers,
+        then it send a command and return the response from multiplexer
+        delay used to receive the response from muliplexer
 
         Args:
-            command (str): The command to send.
+            command (str): command to be send
 
         Returns:
-            Response from the device if any.
+            the response from the multiplexer
+
         """
-        self.visa_handle.write(command)
-        response = self.visa_handle.read()
+        try:
+            response = self.visa_handle.query(command)
+        except pyvisa.VisaIOError as e:
+            self.visa.handle.clear()
+            time.sleep(0.1)
+            response = self.visa_handle.query(command)
+
         return response
 
     def switch32(self, x, y):
@@ -112,10 +108,7 @@ class Muxi(VisaInstrument):
 
         # Construct the command to add the route
         command = f"SWITCH32 {x},{y}"
-        self.send_command(command)
-
-        # Flush the configuration to apply the changes
-        response = self.send_command("FLUSH")
+        response = self.send_command(command)
 
         return response
 
@@ -133,11 +126,7 @@ class Muxi(VisaInstrument):
 
         # Construct the command to add the route
         command = f"SWITCH16 {x},{y}"
-        self.send_command(command)
-
-        # Flush the configuration to apply the changes
-        response = self.send_command("FLUSH")
-
+        response = self.send_command(command)
         return response
 
     def status(self, PIN, OUT):
@@ -165,7 +154,6 @@ class Muxi(VisaInstrument):
         Returns:
             None
         """
-        time.sleep(0.1)
         self.send_command("*RST")
 
     def printconfig(self):
@@ -176,7 +164,7 @@ class Muxi(VisaInstrument):
             None
 
         Returns:
-            configuration matrix as a string.
+            Configuration matrix as a string.
         """
         self.send_command("PRINT")
         response = self.visa_handle.read()
