@@ -1,2 +1,2 @@
-from entropy_adr import ADR
+from adr import ADR
 
