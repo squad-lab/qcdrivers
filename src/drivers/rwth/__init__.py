@@ -1,1 +1,1 @@
-from .mux import mux
+from drivers.rwth.mux import mux

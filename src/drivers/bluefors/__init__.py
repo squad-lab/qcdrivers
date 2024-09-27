@@ -1,1 +1,1 @@
-from .fridges import fridges
+from drivers.bluefors.fridges import fridges
