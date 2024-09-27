@@ -7,7 +7,7 @@ This repository can be installed with:
 ```bash
 pip install git+ssh://git@gitlab.com/squad-lab/measurements/drivers.git
 ```
-Generally, the pip packages have only been tested with `python>=3.9`. Please make sure to update your python installation before going on with installation. For the full list of app dependencies, check `requirements.txt`. Separate `venv` testing environment is suggested while the package is in production, and the tests are being built.
+Generally, the pip packages have only been tested with `python>=3.11`. Please make sure to update your python installation before going on with installation. For the full list of app dependencies, check `requirements.txt`. Separate `venv` testing environment is suggested while the package is in production, and the tests are being built.
 
 ## Directory Structure:
 The repository is structured as follows:
@@ -34,6 +34,8 @@ The drivers can be imported and used as follows:
 ```python
 from drivers.company.package import driver
 ```
+*NOTE:* Imports are resolved in a way that you do not have to be redundant with drivers. So instead of `from drivers.company.package.driver import driver` you should use `from drivers.company.package import driver`
+
 The README for specific drivers can be found in their respective driver directory. The extensive list of parameters can be listed through qcodes:
 ```python
 driver_name = driver("driver_name", address="address", *args, **kwargs)
