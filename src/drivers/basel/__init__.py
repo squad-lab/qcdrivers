@@ -1,2 +1,2 @@
-from .amplifiers import amplifiers
-from .dacs import dacs
+from drivers.basel.amplifiers import amplifiers
+from drivers.basel.dacs import dacs
