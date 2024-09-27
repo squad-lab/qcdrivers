@@ -1,5 +1,6 @@
 from time import sleep
 from typing import Any, Optional
+import numpy as np
 
 from qcodes import Instrument
 from qcodes import validators as vals
@@ -147,7 +148,12 @@ class Lockin(Instrument):
         )
 
     def p_val(self, demods=0) -> float:
-        return self.core.demods[demods].sample()["phase"][0]
+        return np.rad2deg(
+            np.arctan2(
+                self.core.demods[0].sample()["y"][0],
+                self.core.demods[0].sample()["x"][0],
+            )
+        )
 
     def get_idn(self) -> dict:
         return self.core.get_idn()
