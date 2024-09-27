@@ -1,16 +1,22 @@
-# Qcodes driver for Entropy m-type ADR controlling temperature sweeps via PID. Control via TCP/IP.
-# Allows temperature readings of all three sensors (4K, GGG, FAA).
+"""
+Author: Lino Visser
+Affiliation: Forschungszentrum Jülich GmbH
+Updated: 27-09-2024
+"""
 
-# %%
 from typing import Any
-
-from qcodes import Instrument
 import socket
 
+from qcodes import Instrument
 from qcodes.validators import Numbers
 
 
 class ADR(Instrument):
+    """
+    Qcodes driver for Entropy m-type ADR controlling temperature sweeps via PID.
+    Control via TCP/IP.
+    Allows temperature readings of all three sensors (4K, GGG, FAA).
+    """
 
     def __init__(self, name: str, address: str, port: int, **kwargs: Any) -> None:
         super().__init__(name, **kwargs)
