@@ -19,13 +19,23 @@ classifiers = [
 ]
 keywords = ["qcodes", "drivers", "instruments", "SQUAD"]
 dependencies = [
-  "qcodes",
-  "pyvisa",
-  "scipy",
-  "numpy",
-  "matplotlib",
+  "matplotlib>=3.10.1",
+  "numpy>=2.2.4",
+  "pyvisa>=1.14.1",
+  "qcodes==0.45",
+  "scipy>=1.15.2",
+  "zhinst>=25.1.0",
+  "zhinst-qcodes>=0.6.0",
 ]
 
 [project.urls]
 "Homepage" = "https://gitlab.com/squad-lab/measurements/drivers"
 "Bug Tracker" = "https://gitlab.com/squad-lab/measurements/drivers/-/issues"
+
+[dependency-groups]
+dev = [
+    "drivers",
+]
+
+[tool.uv.sources]
+drivers = { workspace = true }
