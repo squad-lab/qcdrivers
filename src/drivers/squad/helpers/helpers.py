@@ -1,6 +1,7 @@
 from time import sleep
 from typing import Any, Optional
 import numpy as np
+import types
 
 from qcodes import Instrument
 from qcodes import validators as vals
@@ -70,20 +71,34 @@ class Lockin(Instrument):
                 self.autovoltin = self.core.sigins[0].autorange
                 self.autocurrin = self.core.sigins[0].autorange
 
-                self.add_parameter(
+                self.snapshot = self.core.snapshot
+                self.core.add_parameter(
                     "R",
                     label=f"{name} R",
                     get_parser=float,
                     get_cmd=self.r_val,
+                    unit=self.get_r_unit(),
                 )
 
-                self.add_parameter(
+                self.core.add_parameter(
                     "P",
                     label=f"{name} P",
                     get_parser=float,
                     get_cmd=self.p_val,
                     unit="deg",
                 )
+
+                _adc_param = self.core.demods[0].adcselect
+                _original_set_raw = _adc_param.set_raw
+
+                def _new_set_raw(this, val):
+                    _original_set_raw(val)
+                    if val == 0:
+                        self.core.R.unit = "V"
+                    elif val == 1:
+                        self.core.R.unit = "A"
+
+                _adc_param.set_raw = types.MethodType(_new_set_raw, _adc_param)
 
             elif device == "UHFLI":
                 # Still have to add all of the parameters here
@@ -99,15 +114,16 @@ class Lockin(Instrument):
                 )
 
                 for demod in range(len(self.core.demods)):
-                    self.add_parameter(
+                    self.core.add_parameter(
                         f"R{demod}",
                         label=f"{name} R{demod}",
                         get_parser=float,
                         get_cmd=self.r_val,
                         demods=demod,
+                        unit=f"{self.get_r_unit(demod)}",
                     )
 
-                    self.add_parameter(
+                    self.core.add_parameter(
                         f"P{demod}",
                         label=f"{name} P{demod}",
                         get_parser=float,
@@ -115,6 +131,18 @@ class Lockin(Instrument):
                         demods=demod,
                         unit="deg",
                     )
+
+                    _adc_param = self.core.demods[demod].adcselect
+                    _original_set_raw = _adc_param.set_raw
+
+                    def _new_set_raw(this, val):
+                        _original_set_raw(val)
+                        if val == 0:
+                            getattr(self.core, f"R{demod}").unit = "V"
+                        elif val == 1:
+                            getattr(self.core, f"R{demod}").unit = "A"
+
+                    _adc_param.set_raw = types.MethodType(_new_set_raw, _adc_param)
 
         else:
             # Still have to add all the parameters here
@@ -125,8 +153,8 @@ class Lockin(Instrument):
             self.sinc = self.core.sync_filter
             self.tc = self.core.time_constant
             self.order = self.filter_slope
-            self.R.label = f"{name} R"
-            self.P.label = f"{name} P"
+            self.core.R.label = f"{name} R"
+            self.core.P.label = f"{name} P"
 
     def delay(self, order, tc) -> float:
         filter_settling = {
@@ -154,6 +182,15 @@ class Lockin(Instrument):
                 self.core.demods[0].sample()["x"][0],
             )
         )
+
+    def get_r_unit(self, demods=0) -> str:
+        match self.core.demods[demods].adcselect():
+            case 0:
+                unit = "V"
+            case 1:
+                unit = "A"
+
+        return unit
 
     def get_idn(self) -> dict:
         return self.core.get_idn()
