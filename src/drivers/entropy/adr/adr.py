@@ -1,7 +1,7 @@
 """
 Author: Lino Visser
 Affiliation: Forschungszentrum Jülich GmbH
-Updated: 27-09-2024
+Updated: 13-05-2025
 """
 
 from typing import Any
@@ -12,13 +12,16 @@ from qcodes.validators import Numbers
 
 
 class ADR(Instrument):
-    """
-    Qcodes driver for Entropy m-type ADR controlling temperature sweeps via PID.
-    Control via TCP/IP.
-    Allows temperature readings of all three sensors (4K, GGG, FAA).
-    """
-
     def __init__(self, name: str, address: str, port: int, **kwargs: Any) -> None:
+        """Qcodes driver for Entropy m-type ADR controlling temperature sweeps via PID.
+        Control via TCP/IP commands provided by entropy manual.
+        Allows temperature and resistance readings of all three sensors (4K, GGG, FAA).
+
+        Args:
+            name: name of the qcodes instrument
+            address: the server's hostname or IP address
+            port: the port used by the server
+        """
         super().__init__(name, **kwargs)
         self.HOST = address  # The server's hostname or IP address
         self.PORT = port  # The port used by the server
@@ -158,17 +161,35 @@ class ADR(Instrument):
         )  # has to send an empty return for the ADR socket to recieve again
         return
 
-    def tempreg(self, enable: bool = 0, temperature: float = 0.045, rate: float = None):
+    def tempreg(
+        self, enable: bool = 0, temperature: float = 0.045, rate: float = None
+    ):  # base value set to approx base T of adr cryostat
+        """PID control of magnet vs FAA stage temperature sensor, PID values can be changed in entropy GUI for specific ranges
+        Args:
+        enable: turn PID loop on/off
+        temperature: desired temperature
+        rate: desired temperature ramp rate of PID loop
+        """
         if rate:
             self.send_raw(f"XTEMPREG {enable} {temperature} {rate} \r\n")
         else:
             self.send_raw(f"XTEMPREG {enable} {temperature} \r\n")
 
     def voltreg(self, enable: bool = 0, voltage: float = 0):
+        """PID control of magnet voltage
+        Args:
+        enable: turn PID loop on/off
+        voltage: desired magnet voltage
+        """
         self.send_raw(f"XVOLTREG {enable} {voltage} \r\n")
 
     def startcompressor(self):
-        self.send_raw(f"STOPCOMPRESSOR \r\n")  # switched due to wrongly soldered relay
+        """Starts pulse tube compressor"""
+        self.send_raw(f"STOPCOMPRESSOR  \r\n")  # switched due to wrongly soldered relay
 
     def stopcompressor(self):
+        """Stops pulse tube compressor"""
         self.send_raw(f"STARTCOMPRESSOR \r\n")
+
+
+# %%

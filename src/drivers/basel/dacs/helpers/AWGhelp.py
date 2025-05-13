@@ -317,8 +317,8 @@ def GenerateRabiSequence(
             for sublist in [[2 * i, 2 * i - 1] for i in range(1, n + 1)]
             for item in sublist
         ]  # list(np.arange(3,2*n+1))+[1,2]  # irrelevant if event-jump is 0, else the sequence pos. to jump to
-        go_to = [0] * (
-            2 * n
+        go_to = (
+            [0] * (2 * n)
         )  # [item for sublist in [[2*i,2*i-1] for i in range(1,n+1)] for item in sublist] # 0 means next
 
         seqname = seq_name
@@ -388,8 +388,8 @@ def GenerateRabiSequence(
             for sublist in [[2 * i, 2 * i - 1] for i in range(1, n + 1)]
             for item in sublist
         ]  # list(np.arange(3,2*n+1))+[1,2]  # irrelevant if event-jump is 0, else the sequence pos. to jump to
-        go_to = [0] * (
-            2 * n
+        go_to = (
+            [0] * (2 * n)
         )  # [item for sublist in [[2*i,2*i-1] for i in range(1,n+1)] for item in sublist] # 0 means next
 
         seqname = seq_name
@@ -465,8 +465,8 @@ def GenerateRabiSequence(
             for sublist in [[2 * i, 2 * i - 1] for i in range(1, n + 1)]
             for item in sublist
         ]  # list(np.arange(3,2*n+1))+[1,2]  # irrelevant if event-jump is 0, else the sequence pos. to jump to
-        go_to = [0] * (
-            2 * n
+        go_to = (
+            [0] * (2 * n)
         )  # [item for sublist in [[2*i,2*i-1] for i in range(1,n+1)] for item in sublist] # 0 means next
 
         seqname = seq_name
@@ -583,7 +583,6 @@ def GenerateRamseySequence(
 
     # Change wait time of Ramsey experiment
     elif vary == "t_wait":
-
         n = len(rng)
 
         CP_array = create_CP(pp)
@@ -664,8 +663,8 @@ def GenerateRamseySequence(
             for sublist in [[2 * i, 2 * i - 1] for i in range(1, n + 1)]
             for item in sublist
         ]  # list(np.arange(3,2*n+1))+[1,2]  # irrelevant if event-jump is 0, else the sequence pos. to jump to
-        go_to = [0] * (
-            2 * n
+        go_to = (
+            [0] * (2 * n)
         )  # [item for sublist in [[2*i,2*i-1] for i in range(1,n+1)] for item in sublist] # 0 means next
 
         seqname = seq_name
@@ -688,7 +687,6 @@ def GenerateRamseySequence(
 
     # Change wait time of Ramsey experiment
     elif vary == "t_phi":
-
         n = len(rng)
 
         CP_array = create_CP(pp)
@@ -773,8 +771,8 @@ def GenerateRamseySequence(
             for sublist in [[2 * i, 2 * i - 1] for i in range(1, n + 1)]
             for item in sublist
         ]  # list(np.arange(3,2*n+1))+[1,2]  # irrelevant if event-jump is 0, else the sequence pos. to jump to
-        go_to = [0] * (
-            2 * n
+        go_to = (
+            [0] * (2 * n)
         )  # [item for sublist in [[2*i,2*i-1] for i in range(1,n+1)] for item in sublist] # 0 means next
 
         seqname = seq_name
@@ -797,7 +795,6 @@ def GenerateRamseySequence(
 
     # Vary the t_pi_2 time:
     elif vary == "t_pi_2":
-
         n = len(rng)
 
         CP_array = create_CP(pp)
@@ -847,8 +844,8 @@ def GenerateRamseySequence(
             for sublist in [[2 * i, 2 * i - 1] for i in range(1, n + 1)]
             for item in sublist
         ]  # list(np.arange(3,2*n+1))+[1,2]  # irrelevant if event-jump is 0, else the sequence pos. to jump to
-        go_to = [0] * (
-            2 * n
+        go_to = (
+            [0] * (2 * n)
         )  # [item for sublist in [[2*i,2*i-1] for i in range(1,n+1)] for item in sublist] # 0 means next
 
         seqname = seq_name
@@ -968,7 +965,6 @@ def GenerateHahnSequence(
 
     # Change wait time of Hahn experiment
     elif vary == "t_wait":
-
         n = len(rng)
 
         CP_array = create_CP(pp)
@@ -1018,8 +1014,8 @@ def GenerateHahnSequence(
             for sublist in [[2 * i, 2 * i - 1] for i in range(1, n + 1)]
             for item in sublist
         ]  # list(np.arange(3,2*n+1))+[1,2]  # irrelevant if event-jump is 0, else the sequence pos. to jump to
-        go_to = [0] * (
-            2 * n
+        go_to = (
+            [0] * (2 * n)
         )  # [item for sublist in [[2*i,2*i-1] for i in range(1,n+1)] for item in sublist] # 0 means next
 
         seqname = seq_name
@@ -1042,7 +1038,6 @@ def GenerateHahnSequence(
 
     # Change wait time of Hahn experiment
     elif vary == "t_phi":
-
         n = len(rng)
 
         CP_array = create_CP(pp)
@@ -1094,8 +1089,8 @@ def GenerateHahnSequence(
             for sublist in [[2 * i, 2 * i - 1] for i in range(1, n + 1)]
             for item in sublist
         ]  # list(np.arange(3,2*n+1))+[1,2]  # irrelevant if event-jump is 0, else the sequence pos. to jump to
-        go_to = [0] * (
-            2 * n
+        go_to = (
+            [0] * (2 * n)
         )  # [item for sublist in [[2*i,2*i-1] for i in range(1,n+1)] for item in sublist] # 0 means next
 
         seqname = seq_name
@@ -1121,7 +1116,6 @@ def GenerateHahnSequence(
 
 
 def SequencePlotter(seqx_input: list, pp: PulseParameter, original_length: int):
-
     trig_waits, nreps, event_jumps, event_jump_to, go_to, wfms, ch_ampls, seqname = (
         seqx_input
     )

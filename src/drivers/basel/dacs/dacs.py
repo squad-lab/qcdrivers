@@ -67,7 +67,6 @@ class SP1060MultiChannel(MultiChannelInstrumentParameter, SP1060Reader):
 
 
 class SP1060Channel(InstrumentChannel, SP1060Reader):
-
     def __init__(self, parent, name, channel, min_val=-10, max_val=10):
         super().__init__(parent, name)
 
