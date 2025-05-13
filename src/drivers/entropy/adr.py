@@ -13,7 +13,6 @@ from qcodes.validators import Numbers
 
 
 class ADR(Instrument):
-
     def __init__(self, name: str, address: str, port: int, **kwargs: Any) -> None:
         """Qcodes driver for Entropy m-type ADR controlling temperature sweeps via PID.
         Control via TCP/IP commands provided by entropy manual.

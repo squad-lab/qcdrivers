@@ -23,7 +23,6 @@ class GateParameter(Parameter):
         scaling: Optional[float] = 1,
         offset: Optional[float] = 0,
     ):
-
         super().__init__(
             name=name,
             instrument=param.instrument,
@@ -57,7 +56,6 @@ class VirtualGateParameter(Parameter):
         offsets: Optional[List[float]] = None,
         get_scaling: Optional[float] = 1,
     ):
-
         super().__init__(
             name=name, instrument=params[0].instrument, unit=params[0].unit
         )
@@ -98,7 +96,6 @@ class CompensatedGateParameter(Parameter):
         unit: Optional[str] = "V",
         scaling: Optional[float] = 1,
     ):
-
         super().__init__(
             name=name,
             instrument=param.instrument,
@@ -113,9 +110,7 @@ class CompensatedGateParameter(Parameter):
         self.gate_s = param.get()
 
     def get_raw(self):
-        return (
-            self.gate_s
-        )  # (self.params.get() - self.pp.C_ampl*self.pp.CP_correction_factor*0.5)/self.scaling
+        return self.gate_s  # (self.params.get() - self.pp.C_ampl*self.pp.CP_correction_factor*0.5)/self.scaling
 
     def set_raw(self, val):
         self.gate_s = val
@@ -171,7 +166,6 @@ class CompensatedGateParameter(Parameter):
 
 class MultiDAQParameter(MultiParameter):
     def __init__(self, params, name, gains: Optional[List[float]] = None):
-
         if type(params[0]) == ScaledParameter:
             self.names = [param.name for param in params]
             self.instr = params[0]._wrapped_parameter.root_instrument
@@ -212,7 +206,6 @@ class MultiDAQParameter(MultiParameter):
 
 class ZILockinParameter(MultiParameter):
     def __init__(self, instr, params, name, names, gain, scaling, units):
-
         super().__init__(
             name=name,
             names=names,
@@ -260,7 +253,6 @@ class ZILockinParameter(MultiParameter):
 
 class QMParameter(MultiParameter):
     def __init__(self, instr, params, name, names, gain, scaling, units):
-
         super().__init__(
             name=name,
             names=names,
@@ -339,7 +331,6 @@ class SimonsVirtualGateParameter(Parameter):
         offsets: Optional[List[float]] = None,
         get_scaling: Optional[float] = 1,
     ):
-
         super().__init__(
             name=name, instrument=params[0].instrument, unit=params[0].unit
         )

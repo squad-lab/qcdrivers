@@ -239,7 +239,7 @@ class DacChannel(InstrumentChannel, DacReader):
             set_cmd=self._set_dac,
             set_parser=self._dac_v_to_code,
             vals=self._volt_val,
-            label=f"channel {channel+self._slot*4}",
+            label=f"channel {channel + self._slot * 4}",
             unit="V",
         )
         self.add_parameter(
@@ -247,7 +247,7 @@ class DacChannel(InstrumentChannel, DacReader):
             set_cmd=self._script_set_dac,
             set_parser=self._dac_v_to_code,
             vals=self._volt_val,
-            label=f"channel {channel+self._slot*4}",
+            label=f"channel {channel + self._slot * 4}",
             unit="V",
         )
         # The limit commands are used to sweep dac voltages. They are not

@@ -13,7 +13,6 @@ from qcodes.instrument import Instrument
 
 
 class Heater(Instrument):
-
     def __init__(
         self, name: str, current_source: Instrument, adr: Instrument, **kwargs: Any
     ) -> None:

@@ -70,11 +70,11 @@ class BlueFors(Instrument):
 
         for pressure_index in range(6):
             self.add_parameter(
-                name=f"p_{pressure_index+1}",
+                name=f"p_{pressure_index + 1}",
                 unit="mBar",
                 get_parser=float,
                 get_cmd=partial(self._get_pressure, pressure_index + 1),
-                docstring=f"Pressure in channel {pressure_index+1}",
+                docstring=f"Pressure in channel {pressure_index + 1}",
             )
 
         self.add_parameter(
