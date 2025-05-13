@@ -158,7 +158,7 @@ class Heater(Instrument):
 
                 # Debug/monitoring: print current values (optional)
                 print(
-                    f"Temperature: {current_temperature:.3f}K, Voltage: {voltage:.3f}V, Error: {error:.3f}, PID Output: {keithley.curr():.3f}"
+                    f"Temperature: {current_temperature:.3f}K, Voltage: {voltage:.3f}V, Error: {error:.3f}, PID Output: {self.current_source.curr():.3f}"
                 )
 
                 # Update variables for next iteration
