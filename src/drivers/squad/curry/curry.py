@@ -178,54 +178,31 @@ class DiffResistance(DiffConductance):
         return idn_dict
 
 
-class Current(Instrument):
+class CurrentSource(Instrument):
     def __init__(
         self,
         name: str,
-        curr_setter: Parameter = None,
-        curr_getter: Parameter = None,
+        current: Parameter = None,
         vccs: VCCS = None,
-        curr_ampl: Parameter = None,
         curr_offset: float = 0,
     ) -> None:
         """
-        Current instrument class for setting and getting the current
+        Current source instrument class for setting and getting the current
 
         Args:
             name: name of the qcodes instrument
-            curr_setter: parameter supposed to be settig current
-            curr_getter: parameter supposed to be getting current
-            vccs: voltage controlled current source
-            curr_ampl: IV converter amplification parameter
+            current: parameter supposed to be settig current
+            vccs: voltage controlled current source (V/A)
             curr_offset: Constant DC current offset for a given amplifier gain
         """
         super().__init__(name)
-        self.curr_setter = curr_setter
-        self.curr_getter = curr_getter
+        self.curr_setter = current
         self.curr_offset = curr_offset
 
         if vccs:
             self.vccs_ampl = vccs.value()
         else:
             self.vccs_ampl = 1
-
-        if curr_ampl:
-            self.curr_ampl = curr_ampl()
-        else:
-            self.curr_ampl = 1
-        self.curr_setter = curr_setter
-        self.curr_getter = curr_getter
-        self.curr_offset = curr_offset
-
-        if vccs:
-            self.vccs_ampl = vccs.value()
-        else:
-            self.vccs_ampl = 1
-
-        if curr_ampl:
-            self.curr_ampl = curr_ampl()
-        else:
-            self.curr_ampl = 1
 
         self.add_parameter(
             "value",
@@ -241,17 +218,53 @@ class Current(Instrument):
         self.curr_setter(i * self.vccs_ampl)
 
     def get_current(self) -> float:
-        return (self.curr_getter() / self.curr_ampl) - self.curr_offset
+        return self.curr_setter() / self.vccs_ampl - self.curr_offset
 
 
-class Voltage(Instrument):
+class CurrentMeasure(Instrument):
     def __init__(
         self,
         name: str,
-        volt_setter: Parameter = None,
-        volt_getter: Parameter = None,
+        current: Parameter = None,
+        curr_ampl: Parameter = None,
+        curr_offset: float = 0,
+    ) -> None:
+        """
+        Current instrument class for getting the current with an IV converter
+
+        Args:
+            name: name of the qcodes instrument
+            current: parameter supposed to be getting current
+            curr_ampl: IV converter amplification parameter
+            curr_offset: Constant DC current offset for a given amplifier gain
+        """
+        super().__init__(name)
+        self.curr_getter = current
+        self.curr_offset = curr_offset
+
+        if curr_ampl:
+            self.curr_ampl = curr_ampl()
+        else:
+            self.curr_ampl = 1
+
+        self.add_parameter(
+            "value",
+            label="Current",
+            get_cmd=self.get_current,
+            get_parser=float,
+            unit="A",
+        )
+
+    def get_current(self) -> float:
+        return (self.curr_getter() / self.curr_ampl) - self.curr_offset
+
+
+class VoltageSource(Instrument):
+    def __init__(
+        self,
+        name: str,
+        voltage: Parameter = None,
         volt_divider: VoltageDivider = None,
-        volt_ampl: Parameter = None,
         volt_offset: float = 0,
     ) -> None:
         """
@@ -259,26 +272,18 @@ class Voltage(Instrument):
 
         Args:
             name: name of the qcodes instrument
-            volt_setter: parameter supposed to be setting voltage
-            volt_getter: parameter supposed to be measuring voltage
+            voltage: parameter supposed to be setting voltage
             volt_divider: voltage divider
-            volt_ampl: differential voltage amplification parameter
             volt_offset: offset on the voltage measured
         """
         super().__init__(name)
-        self.volt_setter = volt_setter
-        self.volt_getter = volt_getter
+        self.volt_setter = voltage
         self.volt_offset = volt_offset
 
         if volt_divider:
             self.volt_divider = volt_divider.value()
         else:
             self.volt_divider = 1
-        if volt_ampl:
-            self.volt_ampl = volt_ampl()
-            self.volt_ampl = volt_ampl()
-        else:
-            self.volt_ampl = 1
 
         self.add_parameter(
             "value",
@@ -291,6 +296,45 @@ class Voltage(Instrument):
 
     def set_voltage(self, v: float) -> None:
         self.volt_setter(v / self.volt_divider)
+
+    def get_voltage(self) -> float:
+        return self.volt_setter() * self.volt_divider - self.volt_offset
+
+
+class VoltageMeasure(Instrument):
+    def __init__(
+        self,
+        name: str,
+        voltage: Parameter = None,
+        volt_ampl: Parameter = None,
+        volt_offset: float = 0,
+    ) -> None:
+        """
+        Voltage instrument class for getting the voltage with a differential amplifier
+
+        Args:
+            name: name of the qcodes instrument
+            voltage: parameter supposed to be measuring voltage
+            volt_ampl: differential voltage amplification parameter
+            volt_offset: offset on the voltage measured
+        """
+        super().__init__(name)
+        self.volt_getter = voltage
+        self.volt_offset = volt_offset
+
+        if volt_ampl:
+            self.volt_ampl = volt_ampl()
+            self.volt_ampl = volt_ampl()
+        else:
+            self.volt_ampl = 1
+
+        self.add_parameter(
+            "value",
+            label="Voltage",
+            get_cmd=self.get_voltage,
+            get_parser=float,
+            unit="V",
+        )
 
     def get_voltage(self) -> float:
         return (self.volt_getter() - self.volt_offset) / self.volt_ampl
