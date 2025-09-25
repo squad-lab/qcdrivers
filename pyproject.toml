@@ -22,7 +22,7 @@ dependencies = [
   "matplotlib>=3.10.1",
   "numpy>=2.2.4",
   "pyvisa>=1.14.1",
-  "qcodes==0.45",
+  "qcodes>=0.45", # ==0.45 required to run plottr in the same venv
   "scipy>=1.15.2",
   "zhinst>=25.1.0",
   "zhinst-qcodes>=0.6.0",
