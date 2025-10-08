@@ -1,8 +1,8 @@
+import types
 from time import sleep
 from typing import Any, Optional
-import numpy as np
-import types
 
+import numpy as np
 from qcodes import Instrument
 from qcodes import validators as vals
 
@@ -87,6 +87,9 @@ class Lockin(Instrument):
                     get_cmd=self.p_val,
                     unit="deg",
                 )
+
+                self.core.R.zi_node = "/DEMODS/0/SAMPLE.R"
+                self.core.P.zi_node = "/DEMODS/0/SAMPLE.THETA"
 
                 _adc_param = self.core.demods[0].adcselect
                 _original_set_raw = _adc_param.set_raw
