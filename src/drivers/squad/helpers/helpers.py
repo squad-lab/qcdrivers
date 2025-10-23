@@ -199,10 +199,16 @@ class Lockin(Instrument):
         return self.core.get_idn()
 
     def __getattr__(self, name):
+        # Avoid recursion for attributes that truly don't exist yet
+        if name == "core":
+            raise AttributeError("'Lockin' object has no attribute 'core'")
         try:
-            return super().__getattr__(name)
+            return super().__getattribute__(name)
         except AttributeError:
-            return self.core.__getattr__(name)
+            core = self.__dict__.get("core", None)
+            if core is not None and hasattr(core, name):
+                return getattr(core, name)
+            raise
 
 
 class Delay(Instrument):
