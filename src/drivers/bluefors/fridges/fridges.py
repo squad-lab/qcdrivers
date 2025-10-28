@@ -1,7 +1,7 @@
 """
 Author: Spandan Anupam
 Affiliation: Forschungszentrum Jülich GmbH
-Updated: 22-07-2023
+Updated: 28-10-2025
 """
 
 from datetime import datetime, timedelta
@@ -11,7 +11,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import requests
-from qcodes.instrument.base import Instrument
+from qcodes.instrument import Instrument
 
 
 class BlueFors(Instrument):
@@ -20,9 +20,9 @@ class BlueFors(Instrument):
         name: str,
         log_location: str,
         bftc_ip: str,
-        bftc_port: int,
         fse_ip: str,
-        fse_port: int,
+        bftc_port: int = 5001,
+        fse_port: int = 5001,
         bftc_channels: dict = {1: "50k", 2: "4k", 3: "magnet", 5: "still", 6: "mxc"},
         heater_channels: dict = {3: "still", 4: "mxc"},
         fse_heater_channels: dict = {4: "fse"},
@@ -121,7 +121,7 @@ class BlueFors(Instrument):
         )
         self.add_parameter(
             name="t_fse",
-            # unit="K",
+            unit="K",
             get_parser=float,
             set_cmd=partial(self._set_temperature, self.fse_ip, self.fse_port, 4),
             get_cmd=partial(self._get_temperature, self.fse_ip, self.fse_port, 1),
@@ -139,6 +139,7 @@ class BlueFors(Instrument):
         for heater_nr, heater_name in heater_channels.items():
             self.add_parameter(
                 name=f"h_{heater_name}",
+                unit="W",
                 get_cmd=partial(
                     self._get_heater, self.bftc_ip, self.bftc_port, heater_nr
                 ),
@@ -323,10 +324,10 @@ class BlueFors(Instrument):
             timeout=self.timeout,
         )
 
-        if req.json()["max_power"] < power:
-            raise ValueError("Power exceeds maximum power")
+        if power > 5e-3:
+            raise ValueError("Power exceeds maximum power (5mW)")
 
-        if not power:
+        if power is False:
             data["active"] = False
 
         else:
