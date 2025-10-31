@@ -121,8 +121,7 @@ class Lockin(Instrument):
                         f"R{demod}",
                         label=f"{name} R{demod}",
                         get_parser=float,
-                        get_cmd=self.r_val,
-                        demods=demod,
+                        get_cmd=lambda d=demod: self.r_val(d),
                         unit=f"{self.get_r_unit(demod)}",
                     )
 
@@ -130,8 +129,7 @@ class Lockin(Instrument):
                         f"P{demod}",
                         label=f"{name} P{demod}",
                         get_parser=float,
-                        get_cmd=self.p_val,
-                        demods=demod,
+                        get_cmd=lambda d=demod: self.p_val(d),
                         unit="deg",
                     )
 
