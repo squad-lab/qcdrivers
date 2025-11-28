@@ -36,13 +36,13 @@ class ADR(Instrument):
             .replace("\\r\\n", "")
         )
         print(str(data))
-        # establish connection
+        # establish connection and select device
         self.s.send(b"DEVSEL ADR\r\n")
-        data = self.s.recv(4096)
+        data = self.s.recv(
+            4096
+        )  # returns startup communication upon successful connection
 
-        def ask(cmd: str):
-            return self.cmd
-
+        # Reads 4K plate temperature
         self.add_parameter(
             "t4K",
             label="4K Stage",
@@ -52,6 +52,7 @@ class ADR(Instrument):
             vals=Numbers(min_value=0, max_value=350),
         )
 
+        # Reads 4K plate temperature sensor resistance
         self.add_parameter(
             "R4K",
             label="R4K",
@@ -61,6 +62,7 @@ class ADR(Instrument):
             vals=Numbers(min_value=0, max_value=10),
         )
 
+        # Reads GGG stage temperature
         self.add_parameter(
             "GGG",
             label="GGG",
@@ -70,6 +72,7 @@ class ADR(Instrument):
             vals=Numbers(min_value=0, max_value=350),
         )
 
+        # Reads GGG stage temperature sensor resistance
         self.add_parameter(
             "RGGG",
             label="RGGG",
@@ -79,6 +82,7 @@ class ADR(Instrument):
             vals=Numbers(min_value=0, max_value=350),
         )
 
+        # Reads FAA stage temperature
         self.add_parameter(
             "FAA",
             label="FAA",
@@ -88,6 +92,7 @@ class ADR(Instrument):
             vals=Numbers(min_value=0, max_value=350),
         )
 
+        # Reads FAA stage temperature sensor resistance
         self.add_parameter(
             "RFAA",
             label="RFAA",
@@ -97,6 +102,7 @@ class ADR(Instrument):
             vals=Numbers(min_value=0, max_value=350),
         )
 
+        # Parameter to query compressor status (on/off)
         self.add_parameter(
             "compressor",
             label="compressor",
@@ -106,6 +112,7 @@ class ADR(Instrument):
             vals=Numbers(min_value=0, max_value=1),
         )
 
+        # Parameter to query magnet sense voltage
         self.add_parameter(
             "magnetsense",
             label="magnetsense",
@@ -115,6 +122,7 @@ class ADR(Instrument):
             vals=Numbers(min_value=0, max_value=1),
         )
 
+        # Parameter to query magnet supply current
         self.add_parameter(
             "supplycurrent",
             label="supplycurrent",
@@ -124,6 +132,7 @@ class ADR(Instrument):
             vals=Numbers(min_value=0, max_value=1),
         )
 
+        # Parameter to query magnet supply voltage
         self.add_parameter(
             "supplyvoltage",
             label="supplyvoltage",
@@ -133,6 +142,7 @@ class ADR(Instrument):
             vals=Numbers(min_value=0, max_value=10),
         )
 
+        # Parameter to query OVC pressure
         self.add_parameter(
             "pressure",
             label="pressure",
@@ -143,6 +153,19 @@ class ADR(Instrument):
         )
 
     def ask_raw(self, cmd: str) -> str:
+        """
+        Send a query command to the ADR and return the numeric value from the response.
+
+        The ADR typically returns a string where the first token is the numeric
+        value of interest, followed by an optional unit or status message.
+        Example: '0.045 K\\r\\n' -> 0.045
+
+        Args:
+            cmd: Command string without terminating newline.
+
+        Returns:
+            Parsed numeric value (first whitespace-separated token as float).
+        """
         self.s.send(bytes(cmd, "utf-8"))
         data = float(
             self.s.recv(4096)
@@ -155,6 +178,15 @@ class ADR(Instrument):
         return data
 
     def send_raw(self, cmd: str):
+        """
+        Send a non-query command to the ADR.
+
+        The ADR expects a command terminated by CRLF, followed by an empty
+        CRLF to allow subsequent communication.
+
+        Args:
+            cmd: Command string (without or with newline; CRLF will be ensured).
+        """
         self.s.send(bytes(cmd, "utf-8"))
         self.s.send(
             bytes(f"\r\n", "utf-8")
@@ -163,13 +195,14 @@ class ADR(Instrument):
 
     def tempreg(
         self, enable: bool = 0, temperature: float = 0.045, rate: float = None
-    ):  # base value set to approx base T of adr cryostat
+    ):  # base value set to approx base T of adr cryostat (40-45mK)
         """PID control of magnet vs FAA stage temperature sensor, PID values can be changed in entropy GUI for specific ranges
         Args:
         enable: turn PID loop on/off
-        temperature: desired temperature
-        rate: desired temperature ramp rate of PID loop
+        temperature: desired temperature (K)
+        rate: desired temperature ramp rate of PID loop (K/min)
         """
+
         if rate:
             self.send_raw(f"XTEMPREG {enable} {temperature} {rate} \r\n")
         else:
@@ -183,6 +216,7 @@ class ADR(Instrument):
         """
         self.send_raw(f"XVOLTREG {enable} {voltage} \r\n")
 
+    # Start and stop pulse tube compressor
     def startcompressor(self):
         """Starts pulse tube compressor"""
         self.send_raw(f"STOPCOMPRESSOR  \r\n")  # switched due to wrongly soldered relay

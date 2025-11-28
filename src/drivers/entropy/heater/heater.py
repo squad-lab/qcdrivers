@@ -30,7 +30,7 @@ class Heater(Instrument):
         self.adr = adr
         self.current_arr = np.array(
             [0, 0.032, 0.06, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4]
-        )  # experimentally determined current and temperature array for current estimates in our specific adr
+        )  # experimentally determined current and temperature array for current estimates in our specific adr with a Keithley 2401 current source
         self.temp_arr = np.array([3.2, 3.5, 4.2, 5.8, 9, 12.7, 17.3, 23.1, 29.2, 35.7])
         self.kp = 0.3  # Proportional gain
         self.ki = 0.01  # Integral gain
@@ -94,26 +94,18 @@ class Heater(Instrument):
             self.current_source.curr(curr_limit)
             print("Im at my limit")
 
-    def ask_raw(self, cmd: str) -> str:
-        self.s.send(bytes(cmd, "utf-8"))
-        data = float(
-            self.s.recv(4096)
-            .decode("utf-8")
-            .strip("b")
-            .replace(",", "")
-            .replace("\r\n", "")
-            .split(" ")[0]
-        )
-        return data
-
-    def send_raw(self, cmd: str):
-        self.s.send(bytes(cmd, "utf-8"))
-        self.s.send(bytes(f"\r\n", "utf-8"))
-        return
-
     def set_T(
         self, temperature: float = 4, duration: float = None, turnoff: bool = True
     ):
+        """
+        Run PID loop to hold the 4K stage at a target temperature.
+
+        Args:
+            temperature: Target temperature (K)
+            duration: If given, run PID for this many seconds
+            turnoff: If True, heater is turned off after PID ends
+        """
+        # Estimate needed current from calibration curve
         self.current_estimate = np.interp(temperature, self.temp_arr, self.current_arr)
         self.current_limit = self.current_estimate * 1.5
         integral = 0.0
