@@ -224,6 +224,3 @@ class ADR(Instrument):
     def stopcompressor(self):
         """Stops pulse tube compressor"""
         self.send_raw(f"STARTCOMPRESSOR \r\n")
-
-
-# %%
