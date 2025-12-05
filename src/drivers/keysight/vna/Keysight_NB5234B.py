@@ -4,7 +4,6 @@ Affiliation: Forschungszentrum Jülich GmbH
 Updated: 05-12-2025
 """
 
-
 import pyvisa as visa
 from qcodes.instrument import VisaInstrument
 
@@ -21,11 +20,15 @@ import io
 # Current adress: "TCPIP0::134.94.110.228::inst0::INSTR"
 
 
-
-
 class KeysightN5234B(VisaInstrument):
-    
-    def __init__(self, name: str, address: str, data_format: str = "DB", delay: float = 0, **kwargs):
+    def __init__(
+        self,
+        name: str,
+        address: str,
+        data_format: str = "DB",
+        delay: float = 0,
+        **kwargs,
+    ):
         """QCodes driver for the communication and basic functions of a Keysight N5234B vector network analyzer.
         You can set th measurement window, RF power, averaging and read the four different S-parameters. The standarad data format is magnitude in dB and phase in degrees.
 
@@ -49,23 +52,19 @@ class KeysightN5234B(VisaInstrument):
 
         self.delay = delay
 
-        #Device parameter and limits
+        # Device parameter and limits
         self.freq_lower_limit = float(10e6)
         self.freq_upper_limit = float(43.5e9)
 
-
         self.address = address
-
 
         # create session with the device
         self.rm = visa.ResourceManager()
         self.session = self.rm.open_resource(self.address)
         print("Connected to Keysight NB5234B.")
 
-
         # add s parameters
         for sparam in ["S11", "S12", "S21", "S22"]:
-
             if self.data_format == "DB":
                 components_with_unit = [("mag", "dB"), ("phase", "deg")]
                 name_map = {"mag": "magnitude", "phase": "phase"}
@@ -90,7 +89,6 @@ class KeysightN5234B(VisaInstrument):
                     get_cmd=self._get_s_parameter(sparam, comp),
                     set_cmd=False,
                 )
-
 
         # frequency
         self.add_parameter(
@@ -119,13 +117,9 @@ class KeysightN5234B(VisaInstrument):
             set_cmd=self._set_averaging,
         )
 
-
-
-
     # -------------------------
     # static helper functions
     # -------------------------
-
 
     @staticmethod
     def vna_probe(frequncy: list, s_trace: list, f_probe: float):
@@ -154,8 +148,6 @@ class KeysightN5234B(VisaInstrument):
         s_probe = y0 + (f_probe - x0) * (y1 - y0) / (x1 - x0)
 
         return float(s_probe)
-    
-
 
     # -------------------------
     # SCPI I/O commands
@@ -175,7 +167,6 @@ class KeysightN5234B(VisaInstrument):
         time.sleep(self.delay)
         return out
 
-
     def query(self, msg: str):
         """Method to execute a command and retrieve its response from the device
 
@@ -190,7 +181,6 @@ class KeysightN5234B(VisaInstrument):
         time.sleep(self.delay)
         return out
 
-
     def write(self, msg: str):
         """Method to execute a command
 
@@ -200,9 +190,6 @@ class KeysightN5234B(VisaInstrument):
         self.session.write(msg)
         # I am assuming you want ot sleep after writing?
         time.sleep(self.delay)
-
-
-
 
     # -------------------------
     # Data saving and transfer on the device
@@ -237,7 +224,7 @@ class KeysightN5234B(VisaInstrument):
         Notes: Transfers only the first ca. 1000 entries, because of bandwidth limitions
         """
         transfer_command = f'MMEMory:TRANsfer? "{folder}{filename}"'
-        
+
         return self.query(transfer_command)
 
     def _get_vna_data(self):
@@ -253,7 +240,6 @@ class KeysightN5234B(VisaInstrument):
             io.StringIO(csv_text), skiprows=6, skipfooter=3, engine="python"
         )
         return df
-
 
     # -------------------------
     # VNA window configuration
@@ -306,7 +292,9 @@ class KeysightN5234B(VisaInstrument):
         # Check for input values
         if plt_start < self.freq_lower_limit or plt_stop < self.freq_lower_limit:
             raise ValueError(
-                "Frequency is too low! Must be over " + str(self.freq_lower_limit) + " GHz."
+                "Frequency is too low! Must be over "
+                + str(self.freq_lower_limit)
+                + " GHz."
             )
         if plt_start > self.freq_upper_limit or plt_stop > self.freq_upper_limit:
             raise ValueError(
@@ -350,7 +338,6 @@ class KeysightN5234B(VisaInstrument):
         """
         self.f_probe = freq
 
-
     def _get_frequency(self):
         df = self._get_vna_data()
         f = df["Freq(Hz)"].to_numpy()
@@ -373,7 +360,6 @@ class KeysightN5234B(VisaInstrument):
         avg = self.query("SENSE:AVERAGE:COUNt?")
         print(f"Averaging set to factor {avg}")
         return avg
-
 
     # -------------------------
     # s parameter configuration
@@ -407,7 +393,6 @@ class KeysightN5234B(VisaInstrument):
             # feed to Trace i+1 (Trace indices start at 1)
             trace_index = i + 1
             self.write(f'DISPlay:WIND1:TRACe{trace_index}:FEED "{trace_name}"')
-
 
     def _get_s_parameter(self, s_parameter: str, component: str):
         # choose an parameter from the list and the component (mag or phase)
@@ -452,12 +437,11 @@ class KeysightN5234B(VisaInstrument):
 
         return getter
 
-
     # -------------------------
     # close the device connection
     # -------------------------
 
-    def close(self, exc_type = None, exc_value = None, traceback = None):
+    def close(self, exc_type=None, exc_value=None, traceback=None):
         """Closes the connection
 
         Args:
@@ -470,4 +454,3 @@ class KeysightN5234B(VisaInstrument):
         print("Connection to Keysight NB5234B closed.")
 
         super().close()
-
