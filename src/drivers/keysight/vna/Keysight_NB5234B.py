@@ -1,109 +1,165 @@
-# %%
+"""
+Author: Simon Schreibing
+Affiliation: Forschungszentrum Jülich GmbH
+Updated: 05-12-2025
+"""
+
 
 import pyvisa as visa
+from qcodes.instrument import VisaInstrument
+
 import time
 import warnings
-import subprocess
+
 import numpy as np
+import pandas as pd
 
 import bisect
+import io
 
 
-# Current adress: 'TCPIP0::K-N5234B-52048.local::inst0::INSTR'
-
-# %% helpers
+# Current adress: "TCPIP0::134.94.110.228::inst0::INSTR"
 
 
-def vna_probe(frequncy: list, s_trace: list, f_probe: float):
-    """
-    method to get s paramter at certain probe frequency
-
-    Args:
-        frequency (list): list of frequency belonging to the measurement
-        s_trace (list): measured s parameter trace [can be mag or phase]
-        f_probe (float): frequency you would like to probe at in Hz
-
-    Returns:
-        s_value (float): fixed s value [can be mag or phase] at given probe frequency
-    """
-
-    if f_probe > np.max(frequncy) or f_probe < np.min(frequncy):
-        raise ValueError(
-            f"Probing frequency lies outside of frequency range ({np.min(frequncy)} to {np.max(frequncy)} Hz)"
-        )
-
-    i = bisect.bisect_left(frequncy, f_probe) - 1
-
-    x0, x1 = frequncy[i], frequncy[i + 1]
-    y0, y1 = s_trace[i], s_trace[i + 1]
-
-    s_probe = y0 + (f_probe - x0) * (y1 - y0) / (x1 - x0)
-
-    return float(s_probe)
 
 
-# %%
-
-###     Device parameter and limits
-freq_lower_limit = float(10e6)
-freq_upper_limit = float(43.5e9)
-
-
-class KeysightN5234B:
-    """Class for the communication and basic functions of a Keysight N5234B PNA
-
-    Raises:
-        ValueError: The delay must be a postive number
-        ValueError: The state for continuous sweep must be either "ON" or "OFF"
-        ValueError: The frequency must be over the device minimum frequency
-        ValueError: The frequency must be under the device maximum frequency
-
-    Returns:
-        float: Returns the delay
-    """
-
-    # TODO : implement reading/setting calibration and instrument state
-    # TODO : implement saving data on local client (not just V)
-
-    device_type = "PNA"
-
-    def __init__(self, address: str, delay: float = 0):
-        """Initializes the opject
+class KeysightN5234B(VisaInstrument):
+    
+    def __init__(self, name: str, address: str, data_format: str = "DB", delay: float = 0, **kwargs):
+        """QCodes driver for the communication and basic functions of a Keysight N5234B vector network analyzer.
+        You can set th measurement window, RF power, averaging and read the four different S-parameters. The standarad data format is magnitude in dB and phase in degrees.
 
         Args:
-            address (str): The IP address of the device
+            name: name of the qcodes instrument (e.g. 'vna')
+            address: the server's hostname or IP address
+            data_format (str, optional): The format in which data is saved. Choose from: "DB" - LogMag / Degrees "RI" - Real / Imaginary "MA" - Magnitude / Angle. Defaults to "DB".
             delay (float, optional): An artifical delay for sending commands. Defaults to 0.
         """
+        super().__init__(name, address, **kwargs)
 
-        self.address = address
+        # probe frequency (to be set)
+        self.f_probe = None
+
+        # default data format
+        allowed_formats = {"DB", "RI", "MA"}
+        if data_format not in allowed_formats:
+            raise ValueError(f"{data_format} not a valid data format.")
+
+        self.data_format = data_format
+
         self.delay = delay
 
-    @property
-    def delay(self):
-        """Property decorator
+        #Device parameter and limits
+        self.freq_lower_limit = float(10e6)
+        self.freq_upper_limit = float(43.5e9)
 
-        Returns:
-            float: Returns delay as private variable
+
+        self.address = address
+
+
+        # create session with the device
+        self.rm = visa.ResourceManager()
+        self.session = self.rm.open_resource(self.address)
+        print("Connected to Keysight NB5234B.")
+
+
+        # add s parameters
+        for sparam in ["S11", "S12", "S21", "S22"]:
+
+            if self.data_format == "DB":
+                components_with_unit = [("mag", "dB"), ("phase", "deg")]
+                name_map = {"mag": "magnitude", "phase": "phase"}
+                label_map = {"mag": "mag", "phase": "arg"}
+            elif self.data_format == "RI":
+                components_with_unit = [("real", ""), ("imag", "")]
+                name_map = {"real": "real", "imag": "imag"}
+                label_map = {"real": "Re", "imag": "Im"}
+            elif self.data_format == "MA":
+                components_with_unit = [("mag", ""), ("phase", "deg")]
+                name_map = {"mag": "magnitude", "phase": "phase"}
+                label_map = {"mag": "mag", "phase": "arg"}
+
+            for comp, unit in components_with_unit:
+                name = f"{sparam.lower()}_{name_map[comp]}"
+                label = f"{label_map[comp]}({sparam})"
+
+                self.add_parameter(
+                    name,
+                    label=label,
+                    unit=unit,
+                    get_cmd=self._get_s_parameter(sparam, comp),
+                    set_cmd=False,
+                )
+
+
+        # frequency
+        self.add_parameter(
+            "frequency",
+            label="f",
+            unit="Hz",
+            get_cmd=self._get_frequency,
+            set_cmd=False,
+        )
+
+        # power
+        self.add_parameter(
+            "power",
+            label="P",
+            unit="dB",
+            get_cmd=self._get_power,
+            set_cmd=self._set_power,
+        )
+
+        # averaging
+        self.add_parameter(
+            "averaging",
+            label="Avg",
+            unit=None,
+            get_cmd=self._get_averaging,
+            set_cmd=self._set_averaging,
+        )
+
+
+
+
+    # -------------------------
+    # static helper functions
+    # -------------------------
+
+
+    @staticmethod
+    def vna_probe(frequncy: list, s_trace: list, f_probe: float):
         """
-        return self._delay
-
-    @delay.setter
-    def delay(self, value):
-        """Setter method for delay function
+        method to get s paramter at certain probe frequency
 
         Args:
-            value (float): Intermediate variable for checking condictions
+            frequency (list): list of frequency belonging to the measurement
+            s_trace (list): measured s parameter trace [can be mag or phase]
+            f_probe (float): frequency you would like to probe at in Hz
 
-        Raises:
-            ValueError: The delay must be a postive number
+        Returns:
+            s_value (float): fixed s value [can be mag or phase] at given probe frequency
         """
-        value = float(value)
-        if value < 0:
-            raise ValueError("Delay must be positive!")
-        if value > 10:
-            warnings.warn("The delay was set quite high. This might take a while.")
 
-        self._delay = value
+        if f_probe > np.max(frequncy) or f_probe < np.min(frequncy):
+            raise ValueError(
+                f"Probing frequency lies outside of frequency range ({np.min(frequncy)} to {np.max(frequncy)} Hz)"
+            )
+
+        i = bisect.bisect_left(frequncy, f_probe) - 1
+
+        x0, x1 = frequncy[i], frequncy[i + 1]
+        y0, y1 = s_trace[i], s_trace[i + 1]
+
+        s_probe = y0 + (f_probe - x0) * (y1 - y0) / (x1 - x0)
+
+        return float(s_probe)
+    
+
+
+    # -------------------------
+    # SCPI I/O commands
+    # -------------------------
 
     def read(self, msg: str):
         """Method to retrieve a status or message from the device
@@ -119,6 +175,7 @@ class KeysightN5234B:
         time.sleep(self.delay)
         return out
 
+
     def query(self, msg: str):
         """Method to execute a command and retrieve its response from the device
 
@@ -133,6 +190,7 @@ class KeysightN5234B:
         time.sleep(self.delay)
         return out
 
+
     def write(self, msg: str):
         """Method to execute a command
 
@@ -143,30 +201,12 @@ class KeysightN5234B:
         # I am assuming you want ot sleep after writing?
         time.sleep(self.delay)
 
-    def __enter__(self):
-        """Creates a session with the device
 
-        Returns:
-            self: Returns its own object
-        """
-        self.rm = visa.ResourceManager()
-        self.session = self.rm.open_resource(self.address)
 
-        print("Connected to Keysight NB5234B.")
 
-        return self
-
-    def __exit__(self, exc_type, exc_value, traceback):
-        """Closes the connection
-
-        Args:
-            exc_type (_type_): Just here so it works
-            exc_value (_type_): Just here so it works
-            traceback (_type_): Just here so it works
-        """
-        self.session.close()
-        self.rm.close()
-        print("Connection to Keysight NB5234B closed.")
+    # -------------------------
+    # Data saving and transfer on the device
+    # -------------------------
 
     def save(self, folder: str, filename: str, format: str):
         """Saves the displayed data in a .csv file
@@ -181,7 +221,6 @@ class KeysightN5234B:
 
         save_command = f':MMEM:STOR:DATA "{folder}{filename}","CSV Formatted Data","Displayed","{format}",{-1}'  # RI for real imaginari instead of LOGM (magnitude and phase)
 
-        # print(f"Data saved in {folder}")
         self.write(save_command)
 
     def data_transfer(self, folder: str, filename: str, delay=0):
@@ -198,8 +237,27 @@ class KeysightN5234B:
         Notes: Transfers only the first ca. 1000 entries, because of bandwidth limitions
         """
         transfer_command = f'MMEMory:TRANsfer? "{folder}{filename}"'
-        # print(f"Data transfer from {folder}")
+        
         return self.query(transfer_command)
+
+    def _get_vna_data(self):
+        """The data is locally saved on the integrated vna windows system and then transfered to the local pc"""
+        # save & transfer
+        folder = "D:\\Samples\\vna_readout_folder\\"
+        filename = "temp.csv"
+
+        self.save(folder, filename, format=self.data_format)
+        csv_text = self.data_transfer(folder, filename)
+
+        df = pd.read_csv(
+            io.StringIO(csv_text), skiprows=6, skipfooter=3, engine="python"
+        )
+        return df
+
+
+    # -------------------------
+    # VNA window configuration
+    # -------------------------
 
     def bandwidth(
         self,
@@ -246,14 +304,14 @@ class KeysightN5234B:
             raise ValueError("Wrong input! The input for bandwidth must be ON or OFF!")
 
         # Check for input values
-        if plt_start < freq_lower_limit or plt_stop < freq_lower_limit:
+        if plt_start < self.freq_lower_limit or plt_stop < self.freq_lower_limit:
             raise ValueError(
-                "Frequency is too low! Must be over " + str(freq_lower_limit) + " GHz."
+                "Frequency is too low! Must be over " + str(self.freq_lower_limit) + " GHz."
             )
-        if plt_start > freq_upper_limit or plt_stop > freq_upper_limit:
+        if plt_start > self.freq_upper_limit or plt_stop > self.freq_upper_limit:
             raise ValueError(
                 "Frequency is too high! Must be under "
-                + str(freq_upper_limit)
+                + str(self.freq_upper_limit)
                 + " GHz."
             )
 
@@ -279,45 +337,54 @@ class KeysightN5234B:
 
         return delay, plt_start_def, plt_stop_def, plt_bw_def
 
-    def set_power(self, src_pow=-60):
+    # -------------------------
+    # getter and setter methods
+    # -------------------------
+
+    def _set_window(self, f_start, f_stop, f_points):
+        self.bandwidth(plt_start=f_start, plt_stop=f_stop, plt_points=f_points)
+
+    def _set_probe_frequency(self, freq: float):
+        """
+        method to set probe frequency: if you want to monitor full trace set it to None (default), if you want single value of S (mag or phase) type in probe frequency
+        """
+        self.f_probe = freq
+
+
+    def _get_frequency(self):
+        df = self._get_vna_data()
+        f = df["Freq(Hz)"].to_numpy()
+        return f
+
+    def _set_power(self, src_pow=-60):
         self.write(f"SOURCE:POWER:LEVEL {src_pow}")
         # print(f"Power set to: {src_pow} dB")
         return self.get_power()
 
-    def get_power(self):
+    def _get_power(self):
         pow = self.query(f"SOURCE:POWER:LEVEL?")
         return pow
 
-    def configure_averaging(self, avg_count: int = 3):
+    def _set_averaging(self, avg_count: int = 3):
         self.write(f"SENSE:AVERAGE:STATE ON")
         self.write(f"SENSE:AVERAGE:COUNT {avg_count}")
 
-    def get_averaging(self):
+    def _get_averaging(self):
         avg = self.query("SENSE:AVERAGE:COUNt?")
         print(f"Averaging set to factor {avg}")
         return avg
 
-    def reset(self, name: str):
-        """Resets the device to factory settings.
 
-        Args:
-            name (str): Name of the device
-
-        Raises:
-            ValueError: The S-parameters have to be combinations of 1,2,3,4
-        """
-        name = str(name)
-
-        # self.write('*RST')
-        self.write("INIT:CONT ON")
-        if float(self.query(f"SWE:TIME?")) <= 10.0e-2:
-            print(name + " reset to default settings successful")
-        else:
-            warnings.warn(name + " reset to default settings NOT successful!")
+    # -------------------------
+    # s parameter configuration
+    # -------------------------
 
     def configure_active_s_parameters(self, sparams: list[str]):
         """
         Activates s parater channel always on trace 1
+
+        Args:
+            sparams (list[str]): list of s parameters to be activated e.g. ["S11","S21"]
         """
         allowed = {"S11", "S12", "S21", "S22"}
         for s in sparams:
@@ -341,217 +408,6 @@ class KeysightN5234B:
             trace_index = i + 1
             self.write(f'DISPlay:WIND1:TRACe{trace_index}:FEED "{trace_name}"')
 
-    def s_parameter(self, s_parameter: str, measurement_name: str = "MyMeas"):
-        """Method for S-parameter measurement
-
-        Args:
-            measurement_name (str, optional): Name for measurement. Will be shown as title. Defaults to 'MyMeas'.
-            s_parameter (str, optional): Decides which S-parameter are measured. Defaults to 'S21'.
-        """
-        allowed_parameter = (
-            "S11",
-            "S12",
-            "S21",
-            "S22",
-        )
-
-        if s_parameter not in allowed_parameter:
-            raise ValueError("The S-parameter is not allowed")
-
-        # self.write("SYST:FPReset")
-
-        self.write("DISPlay:WINDow1:STATE ON")
-        self.write(f'CALCulate:PARameter:DEFine:EXT "{measurement_name}",{s_parameter}')
-        self.write(f'DISPlay:WINDow1:TRACe1:FEED "{measurement_name}"')
-
-    def two_port_s_params(self):
-        self.write("SYST:FPReset")  # potentially dangerous
-        S_parameters = ["S11", "S12", "S21", "S22"]
-        S_parameters = ["S21"]  # quick hack for resonator transmission
-        self.write("DISPlay:WINDow1:STATE ON")
-        for s in S_parameters:
-            self.write(f'CALCulate:PARameter:DEFine:EXT "{s}_measurement",{s}')
-        for i in range(len(S_parameters)):
-            self.write(
-                f'DISPlay:WINDow1:TRACe{i + 1}:FEED "{S_parameters[i]}_measurement"'
-            )
-
-
-def discoverIP(mac: str):
-    """Method to discover the IP address with a given MAC address.
-    Works only if the IP is already in "arp" table.
-
-    Args:
-        mac (str): MAC address of the device
-
-    Returns:
-        address: Returns the IP addressv
-    """
-    mac = str(mac)
-    cmd = f'arp -a | findstr "{mac}" '
-    returned_output = subprocess.check_output(
-        (cmd), shell=True, stderr=subprocess.STDOUT
-    )
-    parse = str(returned_output).split(" ", 1)
-    ip = parse[1].split(" ")
-    address = ip[1]
-    print(ip[1])
-    return address
-
-
-# %%
-
-from qcodes.instrument import Instrument, VisaInstrument, Parameter
-import numpy as np
-import io
-import pandas as pd
-
-
-class QCodesKeysightN5234B(VisaInstrument):
-    def __init__(self, name: str, address: str, **kwargs):
-        super().__init__(name, address, **kwargs)
-
-        self.vna = KeysightN5234B(address)
-        self.vna.__enter__()
-
-        # Magnitude of S11
-        self.add_parameter(
-            "s11_magnitude",
-            label="mag(S11)",
-            unit="dB",
-            get_cmd=self._get_s_parameter("S11", "mag"),
-            set_cmd=False,
-        )
-
-        # Phase of S11
-        self.add_parameter(
-            "s11_phase",
-            label="arg(S11)",
-            unit="deg",
-            get_cmd=self._get_s_parameter("S11", "phase"),
-            set_cmd=False,
-        )
-
-        # Magnitude of S12
-        self.add_parameter(
-            "s12_magnitude",
-            label="mag(S12)",
-            unit="dB",
-            get_cmd=self._get_s_parameter("S12", "mag"),
-            set_cmd=False,
-        )
-
-        # Phase of S12
-        self.add_parameter(
-            "s12_phase",
-            label="arg(S12)",
-            unit="deg",
-            get_cmd=self._get_s_parameter("S12", "phase"),
-            set_cmd=False,
-        )
-
-        # Magnitude of S21
-        self.add_parameter(
-            "s21_magnitude",
-            label="mag(S21)",
-            unit="dB",
-            get_cmd=self._get_s_parameter("S21", "mag"),
-            set_cmd=False,
-        )
-
-        # Phase of S21
-        self.add_parameter(
-            "s21_phase",
-            label="arg(S21)",
-            unit="deg",
-            get_cmd=self._get_s_parameter("S21", "phase"),
-            set_cmd=False,
-        )
-
-        # Magnitude of S22
-        self.add_parameter(
-            "s22_magnitude",
-            label="mag(S22)",
-            unit="dB",
-            get_cmd=self._get_s_parameter("S22", "mag"),
-            set_cmd=False,
-        )
-
-        # Phase of S22
-        self.add_parameter(
-            "s22_phase",
-            label="arg(S22)",
-            unit="deg",
-            get_cmd=self._get_s_parameter("S22", "phase"),
-            set_cmd=False,
-        )
-
-        # frequency
-        self.add_parameter(
-            "frequency",
-            label="f",
-            unit="Hz",
-            get_cmd=self._get_frequency,
-            set_cmd=False,
-        )
-
-        # probe frequency
-        self.f_probe = None
-
-        # power
-        self.add_parameter(
-            "power",
-            label="P",
-            unit="dB",
-            get_cmd=self._get_power,
-            set_cmd=self._set_power,
-        )
-
-        # averaging
-        self.add_parameter(
-            "averaging",
-            label="Avg",
-            unit=None,
-            get_cmd=self._get_averaging,
-            set_cmd=self._set_averaging,
-        )
-
-    #################
-
-    def activate_s_parameter_channels(self, s_parameter_list: list[str]):
-        self.vna.configure_active_s_parameters(s_parameter_list)
-        print(f"Channel {s_parameter_list} opened.")
-
-    def _set_window(self, f_start, f_stop, f_points):
-        self.vna.bandwidth(plt_start=f_start, plt_stop=f_stop, plt_points=f_points)
-
-    def _set_probe_frequency(self, freq: float):
-        """
-        method to set probe frequency: if you want to monitor full trace set it to None (default), if you want single value of S (mag or phase) type in probe frequency
-        """
-        self.f_probe = freq
-
-    def _set_averaging(self, avg_count: int):
-        self.vna.configure_averaging(avg_count)
-
-    def _set_power(self, power):
-        self.vna.set_power(src_pow=power)
-
-    def _get_vna_data(self):
-        """The data is localli saved on the integrated vna windows system and then transfered to the local pc"""
-        # save & transfer
-        folder = "D:\\Samples\\vna_readout_folder\\"
-        filename = "temp.csv"
-
-        self.vna.save(folder, filename, format="DB")
-        csv_text = self.vna.data_transfer(folder, filename)
-
-        df = pd.read_csv(
-            io.StringIO(csv_text), skiprows=6, skipfooter=3, engine="python"
-        )
-        return df
-
-    ### getter method for S-parameters
 
     def _get_s_parameter(self, s_parameter: str, component: str):
         # choose an parameter from the list and the component (mag or phase)
@@ -590,28 +446,28 @@ class QCodesKeysightN5234B(VisaInstrument):
                 f_array = df["Freq(Hz)"].to_numpy()
                 s_array = df[column_key].to_numpy()
 
-                s_param_value = vna_probe(f_array, s_array, self.f_probe)
+                s_param_value = self.vna_probe(f_array, s_array, self.f_probe)
 
                 return s_param_value
 
         return getter
 
-    ###
 
-    def _get_frequency(self):
-        df = self._get_vna_data()
-        f = df["Freq(Hz)"].to_numpy()
-        return f
+    # -------------------------
+    # close the device connection
+    # -------------------------
 
-    def _get_power(self):
-        return float(self.vna.get_power().strip())
+    def close(self, exc_type = None, exc_value = None, traceback = None):
+        """Closes the connection
 
-    def _get_averaging(self):
-        return float(self.vna.get_averaging().strip())
+        Args:
+            exc_type (_type_): Just here so it works
+            exc_value (_type_): Just here so it works
+            traceback (_type_): Just here so it works
+        """
+        self.session.close()
+        self.rm.close()
+        print("Connection to Keysight NB5234B closed.")
 
-    def close(self):
-        self.vna.__exit__(None, None, None)
         super().close()
 
-
-# %%
