@@ -63,7 +63,7 @@ class KeysightN5234B(VisaInstrument):
         self.session = self.rm.open_resource(self.address)
         print("Connected to Keysight NB5234B.")
 
-        #turn off power and averaging by default
+        # turn off power and averaging by default
         self.power_off()
         self.averaging_off()
 
@@ -362,7 +362,7 @@ class KeysightN5234B(VisaInstrument):
     def _set_averaging(self, avg_count: int = 3):
         self.write(f"SENSE:AVERAGE:STATE ON")
         self.write(f"SENSE:AVERAGE:COUNT {avg_count}")
-    
+
     def averaging_off(self):
         self.write("SENS:AVER:STAT OFF")
 
