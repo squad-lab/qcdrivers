@@ -63,6 +63,11 @@ class KeysightN5234B(VisaInstrument):
         self.session = self.rm.open_resource(self.address)
         print("Connected to Keysight NB5234B.")
 
+        # turn off power and averaging by default
+        self.power_off()
+        self.averaging_off()
+
+        # -------------------------
         # add s parameters
         for sparam in ["S11", "S12", "S21", "S22"]:
             if self.data_format == "DB":
@@ -345,16 +350,21 @@ class KeysightN5234B(VisaInstrument):
 
     def _set_power(self, src_pow=-60):
         self.write(f"SOURCE:POWER:LEVEL {src_pow}")
-        # print(f"Power set to: {src_pow} dB")
-        return self.get_power()
+        self.write("OUTPUT:STATE ON")
+
+    def power_off(self):
+        self.write("OUTPUT:STATE OFF")
 
     def _get_power(self):
         pow = self.query(f"SOURCE:POWER:LEVEL?")
-        return pow
+        return float(pow.strip())
 
     def _set_averaging(self, avg_count: int = 3):
         self.write(f"SENSE:AVERAGE:STATE ON")
         self.write(f"SENSE:AVERAGE:COUNT {avg_count}")
+
+    def averaging_off(self):
+        self.write("SENS:AVER:STAT OFF")
 
     def _get_averaging(self):
         avg = self.query("SENSE:AVERAGE:COUNt?")
