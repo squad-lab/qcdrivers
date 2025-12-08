@@ -368,8 +368,7 @@ class KeysightN5234B(VisaInstrument):
 
     def _get_averaging(self):
         avg = self.query("SENSE:AVERAGE:COUNt?")
-        print(f"Averaging set to factor {avg}")
-        return avg
+        return int(avg.strip())
 
     # -------------------------
     # s parameter configuration
