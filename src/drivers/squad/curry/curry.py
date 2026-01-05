@@ -200,7 +200,7 @@ class CurrentSource(Instrument):
         self.curr_offset = curr_offset
 
         if vccs:
-            self.vccs_ampl = vccs.value()
+            self.vccs_ampl = vccs.value
         else:
             self.vccs_ampl = 1
 
@@ -214,11 +214,11 @@ class CurrentSource(Instrument):
         )
 
     def set_current(self, i: float) -> None:
-        self.curr_setter(i * self.vccs_ampl)
-        self.curr_setter(i * self.vccs_ampl)
+        self.curr_setter(i * self.vccs_ampl())
+        self.curr_setter(i * self.vccs_ampl())
 
     def get_current(self) -> float:
-        return self.curr_setter() / self.vccs_ampl - self.curr_offset
+        return self.curr_setter() / self.vccs_ampl() - self.curr_offset
 
 
 class CurrentMeasure(Instrument):
@@ -243,7 +243,7 @@ class CurrentMeasure(Instrument):
         self.curr_offset = curr_offset
 
         if curr_ampl:
-            self.curr_ampl = curr_ampl()
+            self.curr_ampl = curr_ampl
         else:
             self.curr_ampl = 1
 
@@ -256,7 +256,7 @@ class CurrentMeasure(Instrument):
         )
 
     def get_current(self) -> float:
-        return (self.curr_getter() / self.curr_ampl) - self.curr_offset
+        return (self.curr_getter() / self.curr_ampl()) - self.curr_offset
 
 
 class VoltageSource(Instrument):
@@ -264,7 +264,7 @@ class VoltageSource(Instrument):
         self,
         name: str,
         voltage: Parameter = None,
-        volt_divider: VoltageDivider = None,
+        volt_divider: Parameter = None,
         volt_offset: float = 0,
     ) -> None:
         """
@@ -273,7 +273,7 @@ class VoltageSource(Instrument):
         Args:
             name: name of the qcodes instrument
             voltage: parameter supposed to be setting voltage
-            volt_divider: voltage divider
+            volt_divider: parameter for voltage divider
             volt_offset: offset on the voltage measured
         """
         super().__init__(name)
@@ -281,7 +281,7 @@ class VoltageSource(Instrument):
         self.volt_offset = volt_offset
 
         if volt_divider:
-            self.volt_divider = volt_divider.value()
+            self.volt_divider = volt_divider
         else:
             self.volt_divider = 1
 
@@ -295,11 +295,13 @@ class VoltageSource(Instrument):
         )
 
     def set_voltage(self, v: float) -> None:
-        self.volt_setter(v / self.volt_divider)
+        self.volt_setter(v / self.volt_divider())
 
     def get_voltage(self) -> float:
-        return self.volt_setter() * self.volt_divider - self.volt_offset
-
+        return self.volt_setter() * self.volt_divider() - self.volt_offset
+    
+    def get_dac_voltage(self, v: float) -> float:
+        return v / self.volt_divider()
 
 class VoltageMeasure(Instrument):
     def __init__(
@@ -323,8 +325,7 @@ class VoltageMeasure(Instrument):
         self.volt_offset = volt_offset
 
         if volt_ampl:
-            self.volt_ampl = volt_ampl()
-            self.volt_ampl = volt_ampl()
+            self.volt_ampl = volt_ampl
         else:
             self.volt_ampl = 1
 
@@ -337,4 +338,4 @@ class VoltageMeasure(Instrument):
         )
 
     def get_voltage(self) -> float:
-        return (self.volt_getter() - self.volt_offset) / self.volt_ampl
+        return (self.volt_getter() - self.volt_offset) / self.volt_ampl()
