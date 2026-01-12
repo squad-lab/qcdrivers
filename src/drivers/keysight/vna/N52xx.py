@@ -414,7 +414,11 @@ class N5222B(PNABase):
 
 class N5234B(PNABase):
     def __init__(
-        self, name: str, address: str, **kwargs: "Unpack[VisaInstrumentKWArgs]"
+        self, 
+        name: str, 
+        address: str,
+        data_format: str = "DB",
+        **kwargs: "Unpack[VisaInstrumentKWArgs]"
     ) -> None:
         """Driver for Keysight PNA N5234B."""
         super().__init__(
@@ -425,5 +429,6 @@ class N5234B(PNABase):
             min_power=-120,
             max_power=10,
             nports=2,
+            data_format=data_format,
             **kwargs,
         )
