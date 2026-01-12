@@ -39,3 +39,8 @@ dev = [
 
 [tool.uv.sources]
 drivers = { workspace = true }
+
+[tool.uv.workspace]
+members = [
+    ".",
+]
