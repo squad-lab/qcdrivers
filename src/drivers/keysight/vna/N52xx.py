@@ -66,17 +66,41 @@ class PNABase(N52xx.KeysightPNABase):
         # Create parameters for each sparam + component
         for sparam in self.sparams_list:
             if self.data_format == "DB":
-                components_with_unit = [("mag", "dB"), ("phase", "deg")]
-                name_map = {"mag": "magnitude", "phase": "phase"}
-                label_map = {"mag": "mag", "phase": "arg"}
+                components_with_unit = [
+                    ("mag", "dB"),
+                    ("phase", "deg"),
+                    ("unwrapped_phase", "deg"),
+                ]
+                name_map = {
+                    "mag": "magnitude",
+                    "phase": "phase",
+                    "unwrapped_phase": "unwrapped_phase",
+                }
+                label_map = {
+                    "mag": "mag",
+                    "phase": "arg",
+                    "unwrapped_phase": "arg_unwrapped",
+                }
             elif self.data_format == "RI":
                 components_with_unit = [("real", ""), ("imag", "")]
                 name_map = {"real": "real", "imag": "imag"}
                 label_map = {"real": "Re", "imag": "Im"}
             elif self.data_format == "MA":
-                components_with_unit = [("mag", ""), ("phase", "deg")]
-                name_map = {"mag": "magnitude", "phase": "phase"}
-                label_map = {"mag": "mag", "phase": "arg"}
+                components_with_unit = [
+                    ("mag", ""),
+                    ("phase", "deg"),
+                    ("unwrapped_phase", "deg"),
+                ]
+                name_map = {
+                    "mag": "magnitude",
+                    "phase": "phase",
+                    "unwrapped_phase": "unwrapped_phase",
+                }
+                label_map = {
+                    "mag": "mag",
+                    "phase": "arg",
+                    "unwrapped_phase": "arg_unwrapped",
+                }
 
             for comp, unit in components_with_unit:
                 name = f"{sparam.lower()}_{name_map[comp]}"
@@ -136,17 +160,22 @@ class PNABase(N52xx.KeysightPNABase):
         """
         if self.data_format == "DB":
             if component == "mag":
-                # log magnitude in dB
                 return "MLOG"
             if component == "phase":
-                # phase (degrees)
+                # wrapped phase
                 return "PHAS"
+            if component == "unwrapped_phase":
+                # unwrapped phase
+                return "UPH"
         elif self.data_format == "MA":
             if component == "mag":
-                # linear magnitude
                 return "MLIN"
             if component == "phase":
+                # wrapped phase
                 return "PHAS"
+            if component == "unwrapped_phase":
+                # unwrapped phase
+                return "UPH"
         elif self.data_format == "RI":
             if component == "real":
                 return "REAL"
@@ -182,7 +211,7 @@ class PNABase(N52xx.KeysightPNABase):
 
     def _get_s_parameter(self, s_parameter: str, component: str):
         allowed_parameter = tuple(self.sparams_list)
-        allowed_component = ("mag", "phase", "real", "imag")
+        allowed_component = ("mag", "phase", "unwrapped_phase", "real", "imag")
 
         if s_parameter not in allowed_parameter:
             raise ValueError(
@@ -414,11 +443,11 @@ class N5222B(PNABase):
 
 class N5234B(PNABase):
     def __init__(
-        self, 
-        name: str, 
+        self,
+        name: str,
         address: str,
         data_format: str = "DB",
-        **kwargs: "Unpack[VisaInstrumentKWArgs]"
+        **kwargs: "Unpack[VisaInstrumentKWArgs]",
     ) -> None:
         """Driver for Keysight PNA N5234B."""
         super().__init__(
