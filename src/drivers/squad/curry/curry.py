@@ -299,9 +299,10 @@ class VoltageSource(Instrument):
 
     def get_voltage(self) -> float:
         return self.volt_setter() * self.volt_divider() - self.volt_offset
-    
+
     def get_dac_voltage(self, v: float) -> float:
         return v / self.volt_divider()
+
 
 class VoltageMeasure(Instrument):
     def __init__(
