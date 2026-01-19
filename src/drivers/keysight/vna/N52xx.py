@@ -186,6 +186,21 @@ class PNABase(N52xx.KeysightPNABase):
             f"Unsupported component '{component}' for format '{self.data_format}'"
         )
 
+    def get_existing_traces(self) -> dict[str, str]:
+        """
+        Returns dict {trace_name: sparam}
+        """
+        raw = self.ask("CALC:PAR:CAT?")
+        if not raw or raw.strip() == '""':
+            return {}
+
+        items = raw.strip().strip('"').split(",")
+
+        if len(items) % 2 != 0:
+            return {}
+        else:
+            return {items[i]: items[i + 1] for i in range(0, len(items), 2)}
+
     def _ensure_trace_for(self, sparam: str, component: str) -> str:
         """
         Ensure a CALC parameter exists for (sparam, component) and has the correct format.
@@ -197,11 +212,11 @@ class PNABase(N52xx.KeysightPNABase):
         form = self._calc_form_for(component)
 
         # Define the parameter if needed.
-        # Many PNAs will error if it already exists; we ignore that.
-        try:
-            self.write(f'CALCulate:PARameter:DEFine:EXT "{tname}",{sparam}')
-        except Exception:
+        if tname in self.get_existing_traces().keys():
+            # Trace already exists; no need to redefine
             pass
+        else:
+            self.write(f'CALCulate:PARameter:DEFine:EXT "{tname}",{sparam}')
 
         # Select and apply the trace format (usually stored per-parameter/trace)
         self.write(f'CALCulate:PARameter:SELect "{tname}"')
@@ -234,55 +249,65 @@ class PNABase(N52xx.KeysightPNABase):
             # - RI: real or imag
             data = self._query_ascii_floats("CALCulate:DATA? FDAT")
 
-            return data
+            if len(data) == 1:
+                return float(data[0])
+            else:
+                return data
 
         return getter
 
     def _set_frequency(self, freq: list) -> None:
         self.freq = np.asarray(freq, dtype=float)
-        difference = np.diff(self.freq)
 
-        if self.freq.ndim != 1:
-            raise ValueError("freq must be a 1D array")
+        if self.freq.ndim == 0 or self.freq.size == 1:
+            self.start(float(self.freq))
+            self.stop(float(self.freq))
+            self.points(1)
 
-        if np.any(difference <= 0):
-            raise ValueError("freq must be strictly increasing.")
-
-        if np.allclose(difference, difference[0]):
-            self.start(freq[0])
-            self.stop(freq[-1])
-            self.points(len(freq))
         else:
-            segments = []
-            start_idx = 0
+            difference = np.diff(self.freq)
 
-            for i in range(1, len(difference)):
-                if not np.isclose(difference[i], difference[i - 1], rtol=1e-6):
-                    segments.append(self._make_segment(freq, start_idx, i))
-                    start_idx = i
+            if np.any(difference <= 0):
+                raise ValueError("freq must be strictly increasing.")
 
-            segments.append(
-                self._make_segment(self.freq, start_idx, len(self.freq) - 1)
-            )
-            self._set_segment_table(segments)
+            if np.allclose(difference, difference[0]):
+                self.sweep_type("LIN")
+
+                self.points(len(freq))
+                self.start(freq[0])
+                self.stop(freq[-1])
+            else:
+                segments = []
+                start_idx = 0
+
+                for i in range(1, len(difference)):
+                    if not np.isclose(difference[i], difference[i - 1], rtol=1e-6):
+                        segments.append(self._make_segment(freq, start_idx, i))
+                        start_idx = i
+
+                segments.append(
+                    self._make_segment(self.freq, start_idx, len(self.freq) - 1)
+                )
+                self._set_segment_table(segments)
 
     def _get_frequency(self) -> np.ndarray:
         # Best: ask the actual stimulus point list (covers LIN and SEGM)
-        try:
-            f = self._query_ascii_floats("SENSe:FREQuency:DATA?")
-            if f.size > 0:
-                return f
-        except Exception:
-            pass
 
-        # Fallbacks
-        if self.sweep_type() == "LIN":
+        sweep_type = self.sweep_type()
+
+        if sweep_type == "LIN":
             f_start = self.start()
             f_stop = self.stop()
             points = self.points()
-            return np.linspace(f_start, f_stop, points)
 
-        if self.sweep_type() == "SEGM":
+            f_array = np.linspace(f_start, f_stop, points)
+
+            if len(f_array) == 1:
+                return float(f_array[0])
+            else:
+                return f_array
+
+        if sweep_type == "SEGM":
             segments = self._get_segment_table()
             freq_list = []
             for seg in segments:
@@ -402,7 +427,6 @@ class PNABase(N52xx.KeysightPNABase):
             if s not in allowed:
                 raise ValueError(f"{s} not a valid s parameter.")
 
-        self.write("DISP:WIND1:TRAC:DEL:ALL")
         self.write("CALC:PAR:DEL:ALL")
         self.write("DISP:WIND1:STATE ON")
 
