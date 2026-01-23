@@ -265,24 +265,25 @@ class PNABase(N52xx.KeysightPNABase):
             self.points(1)
 
         else:
+            self.freq = np.unique(self.freq)
             difference = np.diff(self.freq)
 
-            if np.any(difference <= 0):
+            if np.any(difference < 0):
                 raise ValueError("freq must be strictly increasing.")
 
             if np.allclose(difference, difference[0]):
                 self.sweep_type("LIN")
 
-                self.points(len(freq))
-                self.start(freq[0])
-                self.stop(freq[-1])
+                self.points(len(self.freq))
+                self.start(self.freq[0])
+                self.stop(self.freq[-1])
             else:
                 segments = []
                 start_idx = 0
 
                 for i in range(1, len(difference)):
                     if not np.isclose(difference[i], difference[i - 1], rtol=1e-6):
-                        segments.append(self._make_segment(freq, start_idx, i))
+                        segments.append(self._make_segment(self.freq, start_idx, i))
                         start_idx = i
 
                 segments.append(
