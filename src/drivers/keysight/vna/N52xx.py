@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Optional
+from qcodes.validators import Arrays, Bool, Enum, Ints, Numbers
 
 import numpy as np
 from qcodes.instrument_drivers.Keysight import N52xx
@@ -116,10 +117,16 @@ class PNABase(N52xx.KeysightPNABase):
                 self.parameters[name]._sparam = sparam
                 self.parameters[name]._component = comp
 
-        # IF bandwidth
-        self.if_bandwidth.get_cmd = self._get_ifbw
-        self.if_bandwidth.set_cmd = self._set_ifbw
-        self.if_bandwidth.vals = None
+        # IF bandwidth segmented support
+        self.remove_parameter("if_bandwidth")
+        self.add_parameter(
+            "if_bandwidth",
+            label="IF Bandwidth",
+            unit="Hz",
+            get_cmd=self._get_ifbw,
+            set_cmd=self._set_ifbw,
+            vals=Numbers(min_value=1, max_value=15e6),
+        )
 
         # Frequency
         self.add_parameter(
@@ -320,9 +327,7 @@ class PNABase(N52xx.KeysightPNABase):
 
         raise ValueError("Unknown sweep type. Only LIN and SEGM are supported.")
 
-    def _make_segment(self, freq, i0, i1, ifbw=None) -> dict:
-        if ifbw is None:
-            ifbw = self.if_bandwidth()
+    def _make_segment(self, freq, i0, i1, ifbw=1e5) -> dict:
         f_start = freq[i0]
         f_stop = freq[i1]
         points = i1 - i0 + 1
@@ -336,7 +341,6 @@ class PNABase(N52xx.KeysightPNABase):
 
     def _set_segment_table(self, segments: list[dict]) -> None:
         self.write("SENS:SEGM:DEL:ALL")
-        self.write("SENS:SWE:TYPE SEGM")
 
         self.write("SENS:SEGM:BWID:PORT:CONT OFF")
         self.write("SENS:SEGM:BWID:CONT ON")
@@ -392,6 +396,7 @@ class PNABase(N52xx.KeysightPNABase):
 
         if sweep_type == "SEGM":
             seg_count = int(self.ask("SENS:SEGM:COUN?"))
+            ifbw = np.atleast_1d(ifbw)
             if len(ifbw) != seg_count:
                 raise ValueError("Length of ifbw list must match number of segments.")
 
@@ -431,12 +436,20 @@ class PNABase(N52xx.KeysightPNABase):
         self.write("CALC:PAR:DEL:ALL")
         self.write("DISP:WIND1:STATE ON")
 
+        trace_index = 1
+
         for i, sp in enumerate(sparams):
             trace_name = f"{sp}_measurement"
-            self.write(f'CALCulate:PARameter:DEFine:EXT "{trace_name}",{sp}')
-            self.write(f'CALC:PAR:SEL "{trace_name}"')
-            trace_index = i + 1
-            self.write(f'DISPlay:WIND1:TRACe{trace_index}:FEED "{trace_name}"')
+
+            if trace_name in self.get_existing_traces().keys():
+                # Trace already exists; no need to redefine
+                pass
+            else:
+                self.write(f'CALCulate:PARameter:DEFine:EXT "{trace_name}",{sp}')
+                self.write(f'CALC:PAR:SEL "{trace_name}"')
+                self.write(f'DISPlay:WIND1:TRACe{trace_index}:FEED "{trace_name}"')
+
+            trace_index += 1
 
 
 class N5222B(PNABase):
