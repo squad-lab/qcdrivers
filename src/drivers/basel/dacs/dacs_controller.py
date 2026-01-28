@@ -14,6 +14,7 @@
 
 from typing import Optional
 from time import sleep
+import pyvisa
 from qcodes.instrument import VisaInstrument
 
 # class ----------------------------------------------------------------
@@ -88,6 +89,9 @@ class BaselDac2Controller:
 
         answer = self.__instrument.ask(command)
 
+        # clear out buffer (if needed use the ask_multi_line method which gives multiline answers)
+        self.__instrument.visa_handle.clear()
+
         # handshaking: check for succesful acknowledge/ valid answer
         if not "?" in command:
             if answer != "0":
@@ -109,7 +113,32 @@ class BaselDac2Controller:
 
         return answer
 
-    # -------------------------------------------------
+    def ask_multi_line(self, command: str) -> Optional[str]:
+        lines = []
+        lines.append(self.__instrument.ask(command))
+
+        self.__instrument.visa_handle.timeout = 300
+
+        try:
+            while True:
+                raw = self.__instrument.visa_handle.read()
+                lines.append(" " + raw)
+        except pyvisa.VisaIOError:
+            pass
+
+        answer = "".join(lines)
+
+        # clear out buffer
+        self.__instrument.visa_handle.clear()
+
+        # handshaking: check for succesful acknowledge/ valid answer
+        if not "?" in command:
+            if answer != "0":
+                raise KeyError(
+                    f"Command ({command}) could not be processed by the device"
+                )
+
+        return answer
 
     ##################################################
 
@@ -582,8 +611,7 @@ class BaselDac2Controller:
         """
         # TODO: check multiline output
 
-        ans = self.write("?")
-        self.__instrument.visa_handle.clear()
+        ans = self.ask_multi_line("?")
 
         return ans
 
@@ -598,8 +626,7 @@ class BaselDac2Controller:
         """
         # TODO: check multiline output
 
-        ans = self.write("help?")
-        self.__instrument.visa_handle.clear()
+        ans = self.ask_multi_line("help?")
 
         return ans
 
@@ -614,8 +641,7 @@ class BaselDac2Controller:
         """
         # TODO: check multiline output
 
-        ans = self.write("soft?")
-        self.__instrument.visa_handle.clear()
+        ans = self.ask_multi_line("soft?")
 
         return ans
 
@@ -630,8 +656,7 @@ class BaselDac2Controller:
         """
         # TODO: check multiline output
 
-        ans = self.write("hard?")
-        self.__instrument.visa_handle.clear()
+        ans = self.ask_multi_line("hard?")
 
         return ans
 
@@ -647,8 +672,7 @@ class BaselDac2Controller:
         """
         # TODO: check multiline output,
 
-        ans = self.write("health?")
-        self.__instrument.visa_handle.clear()
+        ans = self.ask_multi_line("health?")
 
         return ans
 
@@ -663,8 +687,7 @@ class BaselDac2Controller:
         """
         # TODO: check multiline output,
 
-        ans = self.write("ip?")
-        self.__instrument.visa_handle.clear()
+        ans = self.ask_multi_line("ip?")
 
         return ans
 
@@ -694,8 +717,7 @@ class BaselDac2Controller:
         """
         # TODO: check multiline output,
 
-        ans = self.write("contact?")
-        self.__instrument.visa_handle.clear()
+        ans = self.ask_multi_line("contact?")
 
         return ans
 
@@ -2102,4 +2124,4 @@ class BaselDac2Controller:
 if __name__ == "__main__":
     # small testing script
     instrument = VisaInstrument("LNHRDAC", "TCPIP0::192.168.0.5::23::SOCKET")
-    DAC = BaspiLnhrdac2Controller(instrument)
+    DAC = BaselDac2Controller(instrument)

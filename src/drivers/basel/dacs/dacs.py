@@ -24,7 +24,7 @@ from qcodes.instrument import (
 from qcodes.parameters import ParameterWithSetpoints, create_on_off_val_mapping
 import qcodes.validators as validate
 
-from numpy import ndarray, array
+from numpy import ndarray, array, linspace
 from functools import partial
 from dataclasses import dataclass
 from time import sleep
@@ -1309,6 +1309,57 @@ class BaselDac2(VisaInstrument):
         idn = {"vendor": vendor, "model": model, "serial": serial, "firmware": firmware}
 
         return idn
+
+    def ask_basel_controller(self, cmd: str):
+        """
+        This method sends a command directly to the Basel DAC II  and receives multiple answer lines.
+        It is to slow for measurement acquisitions, since it relies on a timeout to determine the end of the answer.
+
+        Parameters:
+        command: command as per programmers manual of the device
+
+        Returns:
+        string: answer of the device for a query
+        """
+
+        answer = self.__controller.ask_multi_line(cmd)
+
+        return answer
+
+    def activate_dac_channels(
+        self,
+        channel_number_list: list[int] = linspace(1, 24, 24, dtype=int),
+        high_bw=False,
+    ):
+        """Activate all DAC channels in the list with specified bandwidth setting and sets them to zero voltage.
+
+        Args:
+            dac_chan_numbers (list[int]): List of DAC channel numbers to activate.
+            high_bandwidth (bool): Whether to set channels to high bandwidth mode.
+        """
+
+        all_channels = self.all
+
+        for chan_number in channel_number_list:
+            chan = all_channels[chan_number - 1]  # ChannelList is zero-indexed
+
+            chan.high_bandwidth.set(high_bw)
+            sleep(0.1)
+
+            if chan.enable.get():
+                continue
+            else:
+                sleep(0.1)
+                chan.enable.set(True)
+                sleep(0.1)
+                chan.voltage.set(0.0)
+
+    get_help_commands = lambda self: self.__controller.get_help_commands()
+    get_help_control = lambda self: self.__controller.get_help_control()
+    get_firmware = lambda self: self.__controller.get_firmware()
+    get_serial = lambda self: self.__controller.get_serial()
+    get_health = lambda self: self.__controller.get_health()
+    get_ip = lambda self: self.__controller.get_ip()
 
 
 # main -----------------------------------------------------------------
