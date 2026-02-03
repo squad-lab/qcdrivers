@@ -152,7 +152,7 @@ class Lockin(Instrument):
             device = "SR830"
             self.core = SR830(f"{name}_core", address, *args, **kwargs)
 
-            self.snapshot = self.core.snapshot()
+            self.snapshot = self.core.snapshot
 
             self.sinc = self.core.sync_filter
             self.tc = self.core.time_constant
