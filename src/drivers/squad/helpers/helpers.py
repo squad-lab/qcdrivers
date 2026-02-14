@@ -57,6 +57,10 @@ class Lockin(Instrument):
                 self.amplitude = self.core.sigouts[0].amplitudes[1].value
                 self.on = self.sigouts[0].on
 
+                self.select_input = (
+                    self.core.demods[0].adcselect
+                )  # call 0 for voltage (Sig In 1) and 1 for current (Curr In 1)
+
                 self.add = self.core.sigouts[0].add
                 self.diff = self.core.sigouts[0].diff
 
@@ -67,9 +71,18 @@ class Lockin(Instrument):
                 self.tc = self.core.demods[0].timeconstant
                 self.order = self.core.demods[0].order
 
+                self.enable_amplitude = self.core.sigouts[0].enables[1].value
+
                 self.autosigout = self.core.sigouts[0].autorange
+                self.sigout_range = self.core.sigouts[
+                    0
+                ].range  # available: 10mV, 100mV, 1V, 10V
+
                 self.autovoltin = self.core.sigins[0].autorange
-                self.autocurrin = self.core.sigins[0].autorange
+                self.voltin_range = self.core.sigins[0].range
+
+                self.autocurrin = self.core.currins[0].autorange
+                self.currin_range = self.core.currins[0].range
 
                 self.snapshot = self.core.snapshot
                 self.core.add_parameter(
