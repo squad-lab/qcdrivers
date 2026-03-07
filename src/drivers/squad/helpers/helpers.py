@@ -33,7 +33,7 @@ class Lockin(Instrument):
     """
 
     def __init__(
-        self, name, address, device="MFLI", serial=None, *args, **kwargs
+        self, name, address, device="MFLI", serial=None, demod_channels: list=[0], *args, **kwargs
     ) -> None:
         super().__init__(f"wrapper_{name}", **kwargs)
         if serial:
@@ -129,16 +129,24 @@ class Lockin(Instrument):
                     **kwargs,
                 )
 
+                self.snapshot = self.core.snapshot
+
                 self.on1 = self.sigouts[0].on
                 self.on2 = self.sigouts[1].on
 
                 self.autosigout1 = self.core.sigouts[0].autorange
                 self.autosigout2 = self.core.sigouts[1].autorange
 
+                # Disable all demodulators first, then only enable the ones specified in demod_channels
                 for demod in range(len(self.core.demods)):
-                    # Add parameters for frequency, R, and P for each for each of the eight demodulators/osscilators
+                    self.core.demods[demod].enable(False)
 
-                    self.add_parameter(
+                for demod in demod_channels:
+                    # Add parameters for frequency, R, and P for each for each of the eight demodulators/osscilators that are input
+
+                    self.core.demods[demod].enable(True)
+
+                    self.core.add_parameter(
                         f"frequency{demod+1}",
                         label=f"{name} Frequency{demod+1}",
                         get_parser=float,
@@ -147,7 +155,7 @@ class Lockin(Instrument):
                         unit="Hz",
                     )
 
-                    self.add_parameter(
+                    self.core.add_parameter(
                         f"R{demod+1}",
                         label=f"{name} R{demod+1}",
                         get_parser=float,
@@ -155,7 +163,7 @@ class Lockin(Instrument):
                         unit=f"{self.get_r_unit(demod)}",
                     )
 
-                    self.add_parameter(
+                    self.core.add_parameter(
                         f"P{demod+1}",
                         label=f"{name} P{demod+1}",
                         get_parser=float,
@@ -164,16 +172,16 @@ class Lockin(Instrument):
                     )
 
                     for out in range(2):
-                        self.add_parameter(
+                        self.core.add_parameter(
                             f"out{out+1}_amplitude{demod+1}",
                             label=f"{name} out{out+1} amplitude {demod+1}",
                             get_parser=float,
                             get_cmd=lambda o=out, d=demod: self.core.sigouts[o].amplitudes[d].value(),
-                            set_cmd=lambda val, o=out, d=demod: self.core.sigouts[o].amplitudes[d].set(val),
+                            set_cmd=lambda val, o=out, d=demod: self.core.sigouts[o].amplitudes[d].value(val),
                             unit="V",
                         )
 
-                        self.add_parameter(
+                        self.core.add_parameter(
                             f"out{out+1}_amplitude{demod+1}_enable",
                             label=f"{name} out{out+1} amplitude {demod+1} enable",
                             get_parser=bool,
