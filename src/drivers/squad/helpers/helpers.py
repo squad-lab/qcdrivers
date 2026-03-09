@@ -137,6 +137,9 @@ class Lockin(Instrument):
                 self.autosigout1 = self.core.sigouts[0].autorange
                 self.autosigout2 = self.core.sigouts[1].autorange
 
+                self.offset_out1 = self.core.sigouts[0].offset
+                self.offset_out2 = self.core.sigouts[1].offset
+
                 # Disable all demodulators first, then only enable the ones specified in demod_channels
                 for demod in range(len(self.core.demods)):
                     self.core.demods[demod].enable(False)
