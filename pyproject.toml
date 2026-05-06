@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "drivers"
-version = "2.1.0"
+version = "2.2.0"
 authors = [
   { name="Spandan Anupam", email="s.anupam@fz-juelich.de" },
   { name="Lino Visser", email="l.visser@fz-juelich.de" },
