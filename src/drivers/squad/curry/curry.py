@@ -8,20 +8,20 @@ class VCCS(Instrument):
         name: str,
     ) -> None:
         super().__init__(name)
-        self._value = 1
+        self._gain = 1
 
         self.add_parameter(
-            name="value",
+            name="gain",
             label="VCCS Amplification",
-            get_cmd=self.get_value,
-            set_cmd=self.set_value,
+            get_cmd=self.get_gain,
+            set_cmd=self.set_gain,
         )
 
-    def set_value(self, val) -> None:
-        self._value = val
+    def set_gain(self, val) -> None:
+        self._gain = val
 
-    def get_value(self) -> float:
-        return self._value
+    def get_gain(self) -> float:
+        return self._gain
 
 
 class VoltageDivider(Instrument):
@@ -200,7 +200,7 @@ class CurrentSource(Instrument):
         self.curr_offset = curr_offset
 
         if vccs:
-            self.vccs_ampl = vccs.value
+            self.vccs_ampl = vccs.gain
         else:
             self.vccs_ampl = 1
 
@@ -214,8 +214,9 @@ class CurrentSource(Instrument):
         )
 
     def set_current(self, i: float) -> None:
-        self.curr_setter(i * self.vccs_ampl())
-        self.curr_setter(i * self.vccs_ampl())
+        print(f"Setting current to {i} A")
+        print(i / self.vccs_ampl())
+        self.curr_setter(i / self.vccs_ampl())
 
     def get_current(self) -> float:
         return self.curr_setter() / self.vccs_ampl() - self.curr_offset
@@ -299,9 +300,10 @@ class VoltageSource(Instrument):
 
     def get_voltage(self) -> float:
         return self.volt_setter() * self.volt_divider() - self.volt_offset
-    
+
     def get_dac_voltage(self, v: float) -> float:
         return v / self.volt_divider()
+
 
 class VoltageMeasure(Instrument):
     def __init__(
