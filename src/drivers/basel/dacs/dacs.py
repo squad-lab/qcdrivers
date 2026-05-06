@@ -1,1803 +1,1372 @@
-import logging
-import os
-import time
+# ----------------------------------------------------------------------------------------------------------------------------------------------
+# LNHR DAC II QCoDeS driver
+# v0.2.0
+# Copyright (c) Basel Precision Instruments GmbH (2025)
+#
+# This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the
+# Free Software Foundation, either version 3 of the License, or any later version. This program is distributed in the hope that it will be
+# useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+# General Public License for more details. You should have received a copy of the GNU General Public License along with this program.
+# If not, see <https://www.gnu.org/licenses/>.
+# ----------------------------------------------------------------------------------------------------------------------------------------------
+
+# imports --------------------------------------------------------------
+
+from drivers.basel.dacs.dacs_controller import BaselDac2Controller
+
+from qcodes.station import Station
+from qcodes.instrument import (
+    VisaInstrument,
+    InstrumentChannel,
+    ChannelList,
+    InstrumentModule,
+)
+from qcodes.parameters import ParameterWithSetpoints, create_on_off_val_mapping
+import qcodes.validators as validate
+
+from numpy import ndarray, array, linspace
 from functools import partial
-from typing import Any, Sequence
+from dataclasses import dataclass
+from time import sleep
 
-import pyvisa as visa
-import qcodes as qc
-from qcodes import ChannelList, InstrumentChannel, VisaInstrument
-from qcodes.instrument.channel import MultiChannelInstrumentParameter
-from qcodes.utils import validators as vals
+# logging --------------------------------------------------------------
 
-from .helpers import Parameterhelp as ph
+import logging
 
 log = logging.getLogger(__name__)
 
-
-class SP1060Exception(Exception):
-    pass
+# class ----------------------------------------------------------------
 
 
-class SP1060Reader(object):
-    def _vval_to_dacval(self, vval):
+class BaspiLnhrdac2LockingValidator(validate.Validator):
+    def __init__(self, submodule: any):
         """
-        Convert voltage to DAC value
-        dacval=(Vout+10)*838860.75
-        """
-        try:
-            dacval = int((float(vval) + 10) * 838860.75)
-            return dacval
-        except:
-            pass
+        This class implements a validator that can be used to lock any submodule of the main instrument.
+        The validator checks the locked-attribute inside the submodule. If True, the validator raises an error.
 
-    def _dacval_to_vval(self, dacval):
+        Parameters:
+        submodule: reference of submodule the locked-attribute is a part of
+
+        Raises:
+        ValueError: the submodule this parameter is a part of is locked
         """
-        Convert DAC value to voltage
-        Vout=(dacval/838860.75 )–10
+        self.submodule = submodule
+
+    def validate(self, value: any, context="BaspiLnhrdac2LockingValidator") -> None:
         """
-        try:
-            vval = round((int(dacval.strip(), 16) / float(838860.75)) - 10, 6)
-            return vval
-        except:
-            pass
+        Validates if the locked-attribute is False.
+        """
+
+        if self.submodule.locked:
+            raise ValueError(
+                f"Submodule {self.submodule} has been locked and is currently not accessible."
+            )
 
 
-class SP1060MultiChannel(MultiChannelInstrumentParameter, SP1060Reader):
+# class ----------------------------------------------------------------
+
+
+class BaspiLnhrdac2Channel(InstrumentChannel):
     def __init__(
         self,
-        channels: Sequence[InstrumentChannel],
-        param_name: str,
-        *args: Any,
-        **kwargs: Any,
+        parent: VisaInstrument,
+        name: str,
+        channel: int,
+        controller: BaselDac2Controller,
     ):
-        super().__init__(channels, param_name, *args, **kwargs)
-        self._channels = channels
-        self._param_name = param_name
+        """
+        Class that defines a channel of the LNHR DAC II with all its QCoDeS-parameters.
 
-        def get_raw(self):
-            output = tuple(
-                chan.parameters[self._param_name].get() for chan in self._channels
-            )
-            return output
+        Channel-Parameters:
+        voltage (-10.0 V ... +10.0 V)
+        high_bandwidth (ON/True: 100 kHz, OFF/False: 100 Hz)
+        enable (ON/True: channel on, OFF/False: channel off)
 
-        def set_raw(self, value):
-            for chan in self._channels:
-                chan.volt.set(value)
+        Parameters:
+        parent: instrument this channel is a part of
+        name: name of the channel
+        channel: channel numnber
+        controller: the controller the instrument uses for its communication
+        """
 
-
-class SP1060Channel(InstrumentChannel, SP1060Reader):
-    def __init__(self, parent, name, channel, min_val=-10, max_val=10):
         super().__init__(parent, name)
 
-        # validate channel number
-        self._CHANNEL_VAL = vals.Ints(1, 24)
-        self._CHANNEL_VAL.validate(channel)
-        self._channel = channel
-
-        # limit voltage range
-        self._volt_val = vals.Numbers(min(min_val, max_val), max(min_val, max_val))
-
-        self.add_parameter(
-            "volt",
-            label="C {}".format(channel),
+        self.voltage = self.add_parameter(
+            name="voltage",
             unit="V",
-            set_cmd=partial(self._parent._set_voltage, channel),
-            set_parser=self._vval_to_dacval,
-            get_cmd=partial(self._parent._read_voltage, channel),
-            vals=self._volt_val,
+            get_cmd=partial(controller.get_channel_dacvalue, channel),
+            set_cmd=partial(controller.set_channel_dacvalue, channel),
+            get_parser=BaselDac2Controller.dacval_to_vval,
+            set_parser=BaselDac2Controller.vval_to_dacval,
+            vals=validate.Numbers(min_value=-10.0, max_value=10.0),
+            initial_value=0.0,
+        )
+
+        self.high_bandwidth = self.add_parameter(
+            name="high_bandwidth",
+            get_cmd=partial(controller.get_channel_bandwidth, channel),
+            set_cmd=partial(controller.set_channel_bandwidth, channel),
+            val_mapping=create_on_off_val_mapping(on_val="HBW", off_val="LBW"),
+            initial_value=False,
+        )
+
+        self.enable = self.add_parameter(
+            name="enable",
+            get_cmd=partial(controller.get_channel_status, channel),
+            set_cmd=partial(controller.set_channel_status, channel),
+            val_mapping=create_on_off_val_mapping(on_val="ON", off_val="OFF"),
+            initial_value=False,
         )
 
 
-class SP1060(VisaInstrument, SP1060Reader):
-    """
-    QCoDeS driver for the Basel Precision Instruments SP1060 LNHR DAC
-    https://www.baspi.ch/low-noise-high-resolution-dac
-    """
+# class ----------------------------------------------------------------
 
+
+class BaspiLnhrdac2AWG(InstrumentModule):
     def __init__(
-        self, name, address, min_val=-10, max_val=10, baud_rate=115200, **kwargs
-    ):
-        """
-        Creates an instance of the SP1060 24 channel LNHR DAC instrument.
-        Args:
-            name (str): What this instrument is called locally.
-            port (str): The address of the DAC. For a serial port this is ASRLn::INSTR
-                        where n is replaced with the address set in the VISA control panel.
-                        Baud rate and other serial parameters must also be set in the VISA control
-                        panel.
-            min_val (number): The minimum value in volts that can be output by the DAC.
-            max_val (number): The maximum value in volts that can be output by the DAC.
-        """
-        super().__init__(name, address, **kwargs)
-
-        # Serial port properties
-        handle = self.visa_handle
-        handle.baud_rate = baud_rate
-        handle.parity = visa.constants.Parity.none
-        handle.stop_bits = visa.constants.StopBits.one
-        handle.data_bits = 8
-        handle.flow_control = visa.constants.VI_ASRL_FLOW_XON_XOFF
-        handle.write_termination = "\r\n"
-        handle.read_termination = "\r\n"
-
-        # Create channels
-        channels = ChannelList(
-            self,
-            "Channels",
-            SP1060Channel,
-            snapshotable=False,
-            multichan_paramclass=SP1060MultiChannel,
-        )
-        self.num_chans = 24
-
-        for i in range(1, 1 + self.num_chans):
-            channel = SP1060Channel(self, "chan{:1}".format(i), i)
-            channels.append(channel)
-            self.add_submodule("ch{:1}".format(i), channel)
-        channels.lock()
-        self.add_submodule("channels", channels)
-
-        # Safety limits for sweeping DAC voltages
-        # inter_delay: Minimum time (in seconds) between successive sets.
-        #              If the previous set was less than this, it will wait until the
-        #              condition is met. Can be set to 0 to go maximum speed with
-        #              no errors.
-
-        # step: max increment of parameter value.
-        #       Larger changes are broken into multiple steps this size.
-        #       When combined with delays, this acts as a ramp.
-        for chan in self.channels:
-            chan.volt.inter_delay = 0.02
-            chan.volt.step = 0.01
-
-        # switch all channels ON if still OFF
-        if "OFF" in self.query_all():
-            self.all_on()
-
-        self.connect_message()
-        print("Current DAC output: " + str(self.channels[:].volt.get()))
-
-    def _set_voltage(self, chan, code):
-        return self.write("{:0} {:X}".format(chan, code))
-
-    def _read_voltage(self, chan):
-        dac_code = self.write("{:0} V?".format(chan))
-        return self._dacval_to_vval(dac_code)
-
-    def set_all(self, volt):
-        """
-        Set all dac channels to a specific voltage.
-        """
-        for chan in self.channels:
-            chan.volt.set(volt)
-
-    def query_all(self):
-        """
-        Query status of all DAC channels
-        """
-        reply = self.write("All S?")
-        print(reply)
-        return reply.replace("\r\n", "").split(";")
-
-    def all_on(self):
-        """
-        Turn on all channels.
-        """
-        return self.write("ALL ON")
-
-    def all_off(self):
-        """
-        Turn off all channels.
-        """
-        return self.write("ALL OFF")
-
-    def empty_buffer(self):
-        # make sure every reply was read from the DAC
-        # while self.visa_handle.bytes_in_buffer:
-        #     print(self.visa_handle.bytes_in_buffer)
-        #     print("Unread bytes in the buffer of DAC SP1060 have been found. Reading the buffer ...")
-        #     print(self.visa_handle.read_raw())
-        #      self.visa_handle.read_raw()
-        #     print("... done")
-        self.visa_handle.clear()
-
-    def write(self, cmd):
-        """
-        Since there is always a return code from the instrument, we use ask instead of write
-        TODO: interpret the return code (0: no error)
-        """
-        # make sure there is nothing in the buffer
-        self.empty_buffer()
-
-        return self.ask(cmd)
-
-    def get_serial(self):
-        """
-        Returns the serial number of the device
-        Note that when querying "HARD?" multiple statements, each terminated
-        by \r\n are returned, i.e. the device`s reply is not terminated with
-        the first \n received
-        """
-        self.write("HARD?")
-        reply = self.visa_handle.read()
-        time.sleep(0.01)
-        # while self.visa_handle.bytes_in_buffer:
-        #     self.visa_handle.read_raw()
-        #     time.sleep(0.01)
-        self.empty_buffer()
-        return reply.strip()[3:]
-
-    def get_firmware(self):
-        """
-        Returns the firmware of the device
-        Note that when querying "HARD?" multiple statements, each terminated
-        by \r\n are returned, i.e. the device`s reply is not terminated with
-        the first \n received
-        """
-        self.write("SOFT?")
-        reply = self.visa_handle.read()
-        time.sleep(0.01)
-        # while self.visa_handle.bytes_in_buffer:
-        #     self.visa_handle.read_raw()
-        #     time.sleep(0.01)
-        self.empty_buffer()
-        return reply.strip()[-5:]
-
-    def get_idn(self):
-        SN = self.get_serial()
-        FW = self.get_firmware()
-        return dict(
-            zip(
-                ("vendor", "model", "serial", "firmware"),
-                ("BasPI", "LNHR DAC SP1060", SN, FW),
-            )
-        )
-
-    def set_newWaveform(
         self,
-        channel="12",
-        waveform="0",
-        frequency="100.0",
-        amplitude="5.0",
-        wavemem="0",
+        parent: VisaInstrument,
+        name: str,
+        awg: str,
+        controller: BaselDac2Controller,
     ):
         """
-        Write the Standard Waveform Function to be generated
-        - Channel: [1 ... 24]
-        Note: AWG-A and AWG-B only DAC-Channel[1...12], AWG-C and AWG-D only DAC-Channel[13...24]
-        - Waveforms:
-            0 = Sine function, for a Cosine function select a Phase [°] of 90°
-            1 = Triangle function
-            2 = Sawtooth function
-            3 = Ramp function
-            4 = Pulse function, the parameter Duty-Cycle is applied
-            5 = Gaussian Noise (Fixed), always the same seed for the random/noise-generator
-            6 = Gaussian Noise (Random), random seed for the random/noise-generator
-            7 = DC-Voltage only, a fixed voltage is generated
-        - Frequency: AWG-Frequency [0.001 ... 10.000]
-        - Amplitude: [-50.000000 ... 50.000000]
-        - Wave-Memory (WAV-A/B/C/D) are represented by 0/1/2/3 respectively
+        Class which defines an AWG (Arbitrary Waveform Generator) of the LNHR DAC II with all its QCoDeS-parameters.
+
+        AWG-Parameters:
+        channel (1 ... 12 or 13 ... 24, selecting AWG output)
+        cycles (0 ... 4 000 000 000, amount of times the waveform is repeated)
+        sampling_rate (0.000 01 s ... 4 000 s)
+        length (0 ... 34 000, amount of data points)
+        time_axis (gets automatically created, depending on AWG settings)
+        waveform (-10.000000 V ... +10.000000 V)
+        trigger (disable: no external trigger, start only: external trigger starts AWG waveform,
+                start stop: AWG is started by a positive signal edge and stopped by a negative signal edge,
+                single step: positive signal edge triggers every point of the waveform)
+        enable (ON/True: start AWG, OFF/False: stop AWG)
+
+        Parameters:
+        parent: instrument this channel is a part of
+        name: name of the channel
+        awg: AWG designator
+        controller: the controller the instrument uses for its communication
         """
-        memsave = ""
-        if wavemem == "0":
-            memsave = "A"
-        elif wavemem == "1":
-            memsave = "B"
-        elif wavemem == "2":
-            memsave = "C"
-        elif wavemem == "3":
-            memsave = "D"
 
-        sleep_time = 0.02
-
-        self.write("C WAV-B CLR")  # Wave-Memory Clear.
-        time.sleep(sleep_time)
-        self.write("C SWG MODE 0")  # generate new Waveform.
-        time.sleep(sleep_time)
-        self.write("C SWG WF " + waveform)  # set the waveform.
-        time.sleep(sleep_time)
-        self.write("C SWG DF " + frequency)  # set frequency.
-        time.sleep(sleep_time)
-        self.write("C SWG AMP " + amplitude)  # set the amplitude.
-        time.sleep(sleep_time)
-        self.write("C SWG WMEM " + wavemem)  # set the Wave-Memory.
-        time.sleep(sleep_time)
-        self.write("C SWG WFUN 0")  # COPY to Wave-MEM -> Overwrite.
-        time.sleep(sleep_time)
-        self.write("C SWG LIN " + channel)  # COPY to Wave-MEM -> Overwrite.
-        time.sleep(sleep_time)
-        self.write(
-            "C AWG-" + memsave + " CH " + channel
-        )  # Write the Selected DAC-Channel for the AWG.
-        time.sleep(sleep_time)
-        self.write("C SWG APPLY")  # Apply Wave-Function to Wave-Memory Now.
-        time.sleep(sleep_time)
-        self.write(
-            "C WAV-" + memsave + " SAVE"
-        )  # Save the selected Wave-Memory (WAV-A/B/C/D) to the internal volatile memory.
-        time.sleep(sleep_time)
-        self.write(
-            "C WAV-" + memsave + " WRITE"
-        )  # Write the Wave-Memory (WAV-A/B/C/D) to the corresponding AWG-Memory (AWG-A/B/C/D).
-        time.sleep(0.5)
-        self.write(
-            "C AWG-" + memsave + " START"
-        )  # Apply Wave-Function to Wave-Memory Now.
-
-    def set_bandwidth(self, chan, code):
-        return self.write("{:0} {:1}".format(chan, code))
-
-    def get_bandwidth(self, chan):
-        dac_code = self.write("{:0} BW?".format(chan))
-        return dac_code
-
-    def read_mode(self, chan):
-        dac_code = self.write("{:0} M?".format(chan))
-        return dac_code
-
-    ############################################################
-
-    #                     SET COMMANDS
-
-    ############################################################
-    ###  SET commands can be repeated at a maximum of 1KHz (1 msec)
-
-    ### SET DAC commands always return a numeric response from the device:
-    """
-    "0" = No error (normal)
-    "1" = Invalid DAC-Channel
-    "2" = Missing DAC-Value, Status or BW
-    "3" = DAC-Value out of range
-    "4" = Mistyped
-    "5" = Writing not allowed (Ramp/Step-Generator or AWG are running on this DAC-
-    Channel)
-    """
-
-    """
-    Set a specific DAC channel to a specified voltage.
-    @chan - integer indicating channel
-    @voltage - hexadecimal voltage value
-    """
-
-    def set_chan_voltage(self, chan, voltage):
-        code = self.write("{:0} {:X}".format(chan, voltage))
-        return self.handleDACSetErrors(code)
-
-    """
-    Set all dac channels to a specific voltage.
-    @voltage - hexadecimal voltage value
-    """
-
-    def set_all_voltage(self, voltage):
-        code = self.write("ALL {:X}".format(voltage))
-        return self.handleDACSetErrors(code)
-
-    """
-    turn on the specified channel
-    @chan - integer 
-    """
-
-    def set_chan_on(self, chan):
-        code = self.write("{0} ON".format(chan))
-        return self.handleDACSetErrors(code)
-
-    """
-    turn off the specified channel
-    @chan - integer 
-    """
-
-    def set_chan_off(self, chan):
-        code = self.write("{0} OFF".format(chan))
-        return self.handleDACSetErrors(code)
-
-    """
-    Turn on all channels.
-    """
-
-    def set_all_on(self):
-        code = self.write("ALL ON")
-        return self.handleDACSetErrors(code)
-
-    """
-    Turn off all channels.
-    """
-
-    def set_all_off(self):
-        code = self.write("ALL OFF")
-        return self.handleDACSetErrors(code)
-
-    """
-    Set the bandwidth of a specified channel (High or Low)
-    @chan - integer 
-    @code - string ("HBW"/"LBW")
-    """
-
-    def set_chan_bandwidth(self, chan, code):
-        code = self.write("{} {}".format(chan, code))
-        return self.handleDACSetErrors(code)
-
-    """
-    Set the bandwidth of all channels (High or Low)
-    @code - string ("HBW"/"LBW")
-    """
-
-    def set_all_bandwidth(self, code):
-        code = self.write("ALL {}".format(code))
-        return self.handleDACSetErrors(code)
-
-    #### All AWG SET Commands return a numeric response:
-    """
-    "0" = No error (normal)
-    "1" = Invalid AWG-Memory
-    "2" = Missing AWG-Address and/or AWG-Value
-    "3" = AWG-Address and/or AWG-Value out of range
-    "4" = Mistyped
-    """
-    ####
-
-    """
-    Set an AWG_memory address to a value
-    @mem - character specifiying AWG-memory
-    @adr - hexadecimal address
-    @value - hexadecimal value of voltage
-    """
-
-    def set_adr_AWGmem(self, mem, adr, value):
-        code = self.write("AWG-{} {:X} {:X}".format(mem, adr, value))
-
-    def set_all_AWGMem(self, mem, value):
-        code = self.write("AWG-{} ALL {:X}".format(mem, value))
-
-    #### All WAV SET Commands return a numeric response:
-    """
-    "0" = No error (normal)
-    "1" = Invalid WAV-Memory
-    "2" = Missing WAV-Address and/or WAV-Voltage
-    "3" = WAV-Address and/or WAV-Voltage out of range
-    "4" = Mistyped
-    """
-    ####
-
-    """
-    Set a WAV-memory address to a value
-    @mem - character specifiying WAV-memory
-    @adr - hecadecimal address
-    @value - hexadecimal value of voltage
-    """
-
-    def set_adr_WAVMem(self, mem, adr, value):
-        code = self.write("WAV-{0} {:X} {:X}".format(mem, adr, value))
-
-    def set_all_WAVMem(self, mem, value):
-        code = self.write("WAV-{0} ALL {:X}".format(mem, value))
-
-    #### POLY command return codes:
-    """
-    "0" = No error (normal)
-    "1" = Invalid Polynomial Name
-    "2" = Missing Polynomial Coefficient(s)
-    "4" = Mistyped
-    """
-    ####
-
-    """
-    Set polynomial coefficients
-    @mem - character of a polynomial memory
-    @coefs - list of floating point values representing the coefficients (a0, a1, a2, a3...)
-    
-    """
-
-    def set_polynomial(self, mem, coefs):
-        fs = [str(c) for c in coefs]
-        code = self.write("POLY-{} {}".format(mem, " ".join(fs)))
-
-    ############################################################
-
-    #                    QUERY DATA COMMANDS
-
-    ############################################################
-
-    """
-    Read the actual voltage of a specified channel
-    @chan - integer 
-    """
-
-    def query_chan_voltage(self, chan):
-        dac_code = self.write("{:0} V?".format(chan))
-        return self._dacval_to_vval(dac_code)
-
-    def query_all_voltage(self):
-        dac_code = self.write("ALL V?")
-        return dac_code
-
-    """
-    Read the registered voltage of a specified channel
-    @chan - integer 
-    """
-
-    def query_chan_voltageReg(self, chan):
-        dac_code = self.write("{:0} VR?".format(chan))
-        return self._dacval_to_vval(dac_code)
-
-    def query_all_voltageReg(self):
-        dac_code = self.write("ALL VR?")
-        return dac_code
-
-    """
-    Query status of a channel
-    @chan - integer 
-    """
-
-    def query_chan_status(self, chan):
-        reply = self.write("{0} S?".format(chan))
-        return reply
-
-    """
-    Query status of all DAC channels
-    """
-
-    def query_all_status(self):
-        reply = self.write("All S?")
-        return reply.replace("\r\n", "").split(";")
-
-    """
-    Query a bandwidth of a channel
-    @chan - integer specifying channel
-    """
-
-    def query_chan_bandwidth(self, chan):
-        reply = self.write("{0} BW?".format(chan))
-        return reply
-
-    def query_all_bandwidth(self):
-        reply = self.write("ALL BW?")
-        return reply.replace("\r\n", "").split(";")
-
-    """
-    Query a DAC mode
-    MODES are ERR/DAC/SYN/RMP/AWG/---
-    See section 7.1.10 of programming manual for descriptions
-    @chan - integer specifying channel
-    """
-
-    def query_chan_DACMode(self, chan):
-        reply = self.write("{0} M?".format(chan))
-        return reply
-
-    def query_all_DACMode(self):
-        reply = self.write("ALL M?")
-        return reply.replace("\r\n", "").split(";")
-
-    """
-    Query memory contents of AWG memory at address(es)
-    @mem - character indicating AWG memory A/B/C/D
-    @adr - hex number indicating address
-    """
-
-    def query_adr_AWGmem(self, mem, adr):
-        reply = self.write("AWG-{0} {:X}?".format(mem, adr))
-        return reply
-
-    """
-    Queries a block of 1,000 AWG hex values starting at block_start
-    @mem - character indicating AWG memory A/B/C/D
-    @block_start - hex number indicating start address
-    """
-
-    def query_block_AWGmem(self, mem, block_start):
-        reply = self.write("AWG-{0} {:X} BLK?".format(mem, block_start))
-        return reply.replace("\r\n", "").split(";")
-
-    """
-    Queries memory contents of WAV memory at address(es)
-    @mem - character indicating AWG memory A/B/C/D
-    @adr - hex number indicating address
-    """
-
-    def query_adr_WAVmem(self, mem, adr):
-        reply = self.write("WAV-{0} {:X}?".format(mem, adr))
-        return reply
-
-    """
-    Queries a block of 1,000 WAV hex values starting at block_start
-    @mem - character indicating AWG memory A/B/C/D
-    @block_start - hex number indicating start address
-    """
-
-    def query_block_WAVmem(self, mem, block_start):
-        reply = self.write("WAV-{0} {:X} BLK?".format(mem, block_start))
-        return reply.replace("\r\n", "").split(";")
-
-    """
-    Query polynomial coefficients of a poly mem
-    @mem - character indicating poly memory A/B/C/D
-    """
-
-    def query_coefs_Polymem(self, mem):
-        reply = self.write("POLY-{0}?".format(mem))
-        return reply.replace("\r\n", "").split(";")
-
-    ############################################################
-
-    #                    QUERY INFORMATION COMMANDS
-
-    ############################################################
-    def get_serial(self):
-        """
-        Returns the serial number of the device
-        Note that when querying "HARD?" multiple statements, each terminated
-        by \r\n are returned, i.e. the device`s reply is not terminated with
-        the first \n received
-        """
-        self.write("HARD?")
-        reply = self.visa_handle.read()
-        time.sleep(0.01)
-        # while self.visa_handle.bytes_in_buffer:
-        #     self.visa_handle.read_raw()
-        #     time.sleep(0.01)
-        self.empty_buffer()
-        return reply.strip()[3:]
-
-    """
-    Returns overview of the ASCII commands and queries
-    """
-
-    def get_overview(self):
-        reply = self.write("?")
-        return reply
-
-    """
-    Shows the help text
-    """
-
-    def get_help(self):
-        reply = self.write("HELP?")
-        return reply
-
-    """
-    Shows the health of the device (temperature, cpu-load, power-supplies)
-    """
-
-    def get_health(self):
-        reply = self.write("HEALTH?")
-        return reply
-
-    """
-    Obtains the IP address of the DAC
-    """
-
-    def get_ip(self):
-        reply = self.write("IP?")
-        return reply
-
-    """
-    Provides contact information (name, lab, website, email. phone)
-    """
-
-    def get_contact(self):
-        reply = self.write("CONTACT?")
-        return reply
-
-    def get_firmware(self):
-        """
-        Returns the firmware of the device
-        Note that when querying "HARD?" multiple statements, each terminated
-        by \r\n are returned, i.e. the device`s reply is not terminated with
-        the first \n received
-        """
-        self.write("SOFT?")
-        reply = self.visa_handle.read()
-        time.sleep(0.01)
-        # while self.visa_handle.bytes_in_buffer:
-        #     self.visa_handle.read_raw()
-        #     time.sleep(0.01)
-        self.empty_buffer()
-        return reply.strip()[-5:]
-
-    """
-    Obtain identification numbers and other manufacturer information about the DAC
-    """
-
-    def get_idn(self):
-        SN = self.get_serial()
-        FW = self.get_firmware()
-        return dict(
-            zip(
-                ("vendor", "model", "serial", "firmware"),
-                ("BasPI", "LNHR DAC SP1060", SN, FW),
-            )
+        super().__init__(parent, name)
+        self.__controller = controller
+
+        self.locked = False
+
+        if awg.lower() == "a" or awg.lower() == "b":
+            board = "ab"
+        elif awg.lower() == "c" or awg.lower() == "d":
+            board = "cd"
+
+        self.channel = self.add_parameter(
+            name="channel",
+            get_cmd=partial(controller.get_awg_channel, awg),
+            set_cmd=partial(controller.set_awg_channel, awg),
+            vals=validate.MultiTypeAnd(
+                validate.Ints(min_value=1, max_value=24),
+                BaspiLnhrdac2LockingValidator(self),
+            ),
         )
 
-    ######################################################################################
+        self.cycles = self.add_parameter(
+            name="cycles",
+            get_cmd=partial(controller.get_awg_cycles, awg),
+            set_cmd=partial(controller.set_awg_cycles, awg),
+            vals=validate.MultiTypeAnd(
+                validate.Ints(min_value=0, max_value=4000000000),
+                BaspiLnhrdac2LockingValidator(self),
+            ),
+            initial_value=0,
+        )
+
+        self.sampling_rate = self.add_parameter(
+            name="sampling_rate",
+            unit="s",
+            get_cmd=partial(controller.get_awg_clock_period, board),
+            set_cmd=partial(controller.set_awg_clock_period, board),
+            get_parser=self.__get_parser_awg_sampling_rate,
+            set_parser=self.__set_parser_awg_sampling_rate,
+            vals=validate.MultiTypeAnd(
+                validate.Numbers(min_value=0.00001, max_value=4000.0),
+                BaspiLnhrdac2LockingValidator(self),
+            ),
+        )
+
+        self.length = self.add_parameter(
+            # Qcodes only value, not saved on device
+            # must be set whenever self.waveform is set
+            name="length",
+            get_cmd=None,
+            set_cmd=None,
+            initial_value=0,
+            vals=validate.MultiTypeAnd(
+                validate.Ints(min_value=0, max_value=34000),
+                BaspiLnhrdac2LockingValidator(self),
+            ),
+        )
+
+        self.time_axis = self.add_parameter(
+            name="time_axis",
+            label="time",
+            unit="s",
+            get_cmd=partial(self.__get_awg_time_axis, awg),
+            get_parser=partial(array, dtype=float),
+            vals=validate.Arrays(shape=(self.length,)),
+        )
+
+        self.waveform = self.add_parameter(
+            name="waveform",
+            label=f"waveform AWG {awg.upper()}",
+            unit="V",
+            parameter_class=ParameterWithSetpoints,
+            get_cmd=partial(self.__get_awg_waveform, awg),
+            set_cmd=partial(self.__set_awg_waveform, awg),
+            get_parser=partial(array, dtype=float),
+            set_parser=list,
+            setpoints=(self.time_axis,),
+            vals=validate.Arrays(shape=(self.length,), min_value=-10.0, max_value=10.0),
+        )
+
+        self.trigger = self.add_parameter(
+            name="trigger",
+            get_cmd=partial(controller.get_awg_trigger_mode, awg),
+            set_cmd=partial(controller.set_awg_trigger_mode, awg),
+            val_mapping={
+                "disable": 0,
+                "start only": 1,
+                "start stop": 2,
+                "single step": 3,
+            },
+            vals=BaspiLnhrdac2LockingValidator(self),
+            initial_value="disable",
+        )
+
+        self.enable = self.add_parameter(
+            name="enable",
+            get_cmd=partial(controller.get_awg_run_state, awg),
+            set_cmd=partial(controller.set_awg_start_stop, awg),
+            get_parser=BaspiLnhrdac2AWG.__get_parser_awg_enable,
+            val_mapping=create_on_off_val_mapping(on_val="START", off_val="STOP"),
+            vals=BaspiLnhrdac2LockingValidator(self),
+            initial_value=False,
+        )
+
+        board = None
+
+    # -------------------------------------------------
+
+    @staticmethod
+    def __get_parser_awg_sampling_rate(val: int) -> float:
+        """
+        Parsing method to convert the AWG sampling rate from us (micro seconds) to s (seconds).
+        """
+
+        return round(val / 1000000, 6)
+
+    # -------------------------------------------------
+
+    @staticmethod
+    def __set_parser_awg_sampling_rate(val: float) -> int:
+        """
+        Parsing method to convert the AWG sampling rate from s (seconds) to us (micro seconds).
+        """
 
-    #                  DAC Update-Mode and Synchronization CONTROL COMMANDS
+        return int(val * 1000000)
 
-    ######################################################################################
-    """
-    Returns the update mode of the device for the given board (higher or lower)
-    @board - character, 'H'/'L' for higher or lower board
-    """
-
-    def read_updateMode(self, board):
-        return self.write("C UM-{}?".format(board))
-
-    """
-    Writes the update mode for the higher or lower board.
-    @board - character, 'H'/'L' for higher or lower board
-    @mode = integer, either 0/1 for instantly/synchronous
-    """
-
-    def write_updateMode(self, board, mode):
-        self.write("C UM-{} {}".format(board, mode))
-
-    """
-    Makes a synchronous DAC-update of all 12 channels on one DAC Board,
-    or on both in parallel
-    @board - string indicating board(s) to update: "H"/"L"/"HL" for higher/lower/both
-    """
-
-    def update_board_sync(self, board):
-        return self.write("C SYNC-{}".format(board))
-
-    ######################################################################################
-
-    #                  RAMP/STEP-Generator CONTROL COMMANDS
-
-    ######################################################################################
-
-    """
-    Control the mode of the four RAMP/STEP generators.
-    Modes are START, STOP, HOLD.  Ramp memories are A/B/C/D.
-    By indicating "ALL" you can control all 4 generators.
-    @mem - the ramp memory to control: A/B/C/D/ALL
-    @mode - string indicating mode: HOLD/START/STOP
-    """
-
-    def write_rampMode(self, mem, mode):
-        return self.write("C RMP-{} {}".format(mem, mode))
-
-    """
-    Read the state of one ramp generator
-    States are Idle/Ramp_UP/Ramp_DOWN/Hold (coded as 0/1/2/3, respectively)
-    @mem - character indicating ramp mem: A/B/C/D
-    """
-
-    def read_rampState(self, mem):
-        return self.write("C RMP-{} S?".format(mem))
-
-    """
-    Read the cycles done since the start of the specified ramp generator
-    @mem - character indicating ramp mem: A/B/C/D 
-    """
-
-    def read_rampCyclesDone(self, mem):
-        return self.write("C RMP-{} CD?".format(mem))
-
-    """
-    Read the steps done since the start of the specified ramp generator
-    @mem - character indicating ramp mem: A/B/C/D 
-    """
-
-    def read_rampStepsDone(self, mem):
-        return self.write("C RMP-{} SD?".format(mem))
-
-    """
-    Reads the step-size voltage of the specified ramp generator
-    @mem - character indicating ramp mem: A/B/C/D 
-    """
-
-    def read_rampStepSizeVoltage(self, mem):
-        return self.write("C RMP-{} SSV?".format(mem))
-
-    """
-    Read the calculated step per cycle of a ramp memory.
-    @mem - character indicating ramp mem: A/B/C/D
-    """
-
-    def read_rampStepsPerCycle(self, mem):
-        return self.write("C RMP-{} ST?".format(mem))
-
-    """
-    Readout if the selected DAC-Channel of the RAMP/STEP-Generator (RMP-A/B/C/D) is
-    available (not used by other RAMP- or AWG-Channels). The returned integer number
-    gives the availability:
-        0=Not Available/1=Available
-    A running generator always reads not available.
-    @mem - character indicating ramp mem: A/B/C/D
-    """
-
-    def read_rampChannelAvailable(self, mem):
-        return self.write("C RMP-{} AVA?".format(mem))
-
-    """
-    Read or write the Selected DAC-Channel for the RAMP/STEP-Generator (RMP-A/B/C/D).
-    The DAC-Channel can be in the range from 1 to 24. After writing the Selected DAC-
-    Channel, its availability can be checked
-    @mem - character indicating ramp mem: A/B/C/D 
-    @chan - integer specifying the channel
-    """
-
-    def read_rampSelectedChannel(self, mem):
-        return self.write("C RMP-{} CH?".format(mem))
-
-    def write_rampSelectedChannel(self, mem, chan):
-        return self.write("C RMP-{} CH {}".format(mem, chan))
-
-    """
-    Read or write the Start Voltages of the RAMP/STEP-Generators (RMP-A/B/C/D). The
-    Start Voltage is a floating-point number in the range between -10.000000 V and
-    +10.000000 V; the decimal point must be a period (point).
-    @mem - character indicating ramp mem: A/B/C/D 
-    @voltage - floating point number indicating voltage
-    """
-
-    def read_rampStartVoltage(self, mem):
-        return self.write("C RMP-{} STAV?".format(mem))
-
-    def write_rampStartVoltage(self, mem, voltage):
-        return self.write("C RMP-{} STAV {}".format(mem, voltage))
-
-    """
-    Read or write the Stop/Peak Voltages of the RAMP/STEP-Generators (RMP-A/B/C/D).
-    The Stop/Peak Voltage is a floating-point number in the range between -10.000000 V and
-    +10.000000 V; the decimal point must be a period (point). If the RAMP Shape is UP-ONLY
-    (Sawtooth function) this value is the Stop Voltage. If the RAMP Shape is UP and DOWN
-    (Triangle function) this value is the Peak Voltage, since the Triangle function returns to
-    the Start Voltage.
-    @mem - character indicating ramp mem: A/B/C/D 
-    @voltage - floating point number indicating voltage
-    """
-
-    def read_rampStopPeakVoltage(self, mem):
-        return self.write("C RMP-{} STOV?".format(mem))
-
-    def write_rampStopPeakVoltage(self, mem, voltage):
-        return self.write("C RMP-{} STOV {}".format(mem, voltage))
-
-    """
-    Read or write the RAMP Times of the RAMP/STEP-Generators (RMP-A/B/C/D). The
-    RAMP Time is a floating-point number in the range between 0.05 second and 1E6 seconds
-    (equal to 277.7 hours); the decimal point must be a period (point). The inherent
-    resolution is given by the RAMP/STEP-Generator cycle of 5 msec (0.005 second).
-    @mem - character indicating ramp mem: A/B/C/D 
-    @time - floating point number of seconds
-    """
-
-    def read_rampTime(self, mem):
-        return self.write("C RMP-{} RT?".format(mem))
-
-    def write_rampTime(self, mem, time):
-        return self.write("C RMP-{} RT {}".format(mem, time))
-
-    """
-    Read or write the RAMP Shape of the RAMP/STEP-Generators (RMP-A/B/C/D). Two
-    different Shapes of the Ramping/Stepping function can be written or readout:
-    0=UP-ONLY (Sawtooth function)/1=UP and DOWN (Triangle function)
-    @mem - character indicating ramp mem: A/B/C/D 
-    @shape - integer 0/1 indicating shape of RAMP function
-    """
-
-    def read_rampShape(self, mem):
-        return self.write("C RMP-{} RS?".format(mem))
-
-    def write_rampShape(self, mem, shape):
-        return self.write("C RMP-{} RS {}".format(mem, shape))
-
-    """
-    Read or write the number of RAMP Cycles-Set (0....4E9) of the four RAMP/STEP-
-    Generators (RMP-A/B/C/D). The integer number represents the number of RAMP Cycles-
-    Set until the RAMP/STEP-Generator gets stopped. If the number of RAMP Cycles-Set is
-    zero (0), an infinite number of RAMP Cycles are done; the RAMP/STEP-Generator runs
-    until it is stopped by the user
-    @mem - character indicating ramp mem: A/B/C/D 
-    @cycles - integer specifying cycles 
-    """
-
-    def read_rampCyclesSet(self, mem):
-        return self.write("C RMP-{} CS?".format(mem))
-
-    def write_rampCyclesSet(self, mem, cycles):
-        return self.write("C RMP-{} CS {}".format(mem, cycles))
-
-    """
-    Read or write the RAMP/STEP-Selection of the four RAMP/STEP-Generators (RMP-
-    A/B/C/D). The RAMP/STEP-Generators can be switched between RAMP function and
-    STEP function. The normal RAMP function periodically updates the DAC-Voltage each
-    5 msec. The STEP function updates the DAC-Voltage when the AWG has stopped (single
-    cycle); this used for 2D-Scans. The two different functions (RAMP/STEP) can be written
-    or readout:
-    0=RAMP function/1=STEP function
-    @mem - character indicating ramp mem: A/B/C/D 
-    @sel - integer indicating selection, 0: RAMP, 1: STEP
-    """
-
-    def read_rampStepSelection(self, mem):
-        return self.write("C RMP-{} STEP?".format(mem))
-
-    def write_rampStepSelection(self, mem, sel):
-        return self.write("C RMP-{} STEP {}".format(mem, sel))
-
-    ######################################################################################
-
-    #                  2D-Scan CONTROL COMMANDS
-
-    ######################################################################################
-    """
-    Read or write the Boolean parameter Normal-Start / Auto-Start AWG. If Auto-Start AWG
-    is selected (1) the AWG gets automatically restarted after the STEP-Generator has been
-    updated. A minimum time delay of 5 msec is implemented from the update of the STEP-
-    Generator to the restart of the AWG.
-    If Auto-Start AWG is deselected (0) the AWG starts normally by an external TTL-Trigger
-    or via a CONTROL Command. The two different modes (Normal-Start AWG or Auto-Start
-    AWG) can be written or readout:
-    0=Normal-Start AWG/1=Auto-Start AWG
-    @mem - character indicating AWG memory A/B/C/D
-    @mode - integer of start mode, 0: normal 1: auto
-    """
-
-    def read_AWGStartMode(self, mem):
-        return self.write("C AWG-{} AS?".format(mem, mode))
-
-    def write_AWGStartMode(self, mem, mode):
-        return self.write("C AWG-{} AS {}".format(mem, mode))
-
-    """
-    Read or write the Boolean parameter Keep/Reload AWG MEM. If Reload AWG MEM is
-    selected (1) the AWG-Memory (AWG-A/B/C/D) is reloaded from the corresponding
-    Wave-Memory (WAV-A/B/C/D) before it gets restarted. This is option is slower, but has
-    to be selected since the Polynomial (POLY-A/B/C/D) must be applied to perform an
-    adaptive 2D-Scan
-    If Keep AWG MEM is selected (0) the predefined AWG-Memory is used for a next scan-
-    line, which allows a faster 2D-Scan, but without adaption. These two different behaviors
-    (Keep AWG MEM or Reload AWG MEM) can be written or readout:
-    0=Keep AWG MEM/1=Reload AWG MEM
-    @mem - character indicating AWG memory A/B/C/D
-    @mode - integer of mode, 0/1 (keep/reload)
-    """
-
-    def read_AWGReloadMode(self, mem):
-        return self.write("C AWG-{} RLD?".format(mem, mode))
-
-    def write_AWGReloadMode(self, mem, mode):
-        return self.write("C AWG-{} RLD {}".format(mem, mode))
-
-    """
-    Read or write the Boolean parameter Skip/Apply Polynomial. If Apply Polynomial is
-    selected (1) the Polynomial (POLY-A/B/C/D) is applied when the AWG-Memory (AWG-
-    A/B/C/D) is reloaded from the corresponding Wave-Memory (WAV-A/B/C/D); this is
-    essential for an adaptive 2D-Scan. The Polynomial (POLY-A/B/C/D) can be updated fast
-    by using the SET POLY Command or by using the parameter “Adaptive Shift-Voltage” – see
-    description below.
-    If Skip Polynomial is selected the Polynomial (POLY-A/B/C/D) isn’t applied when the
-    predefined Wave-Memory (WAV-A/B/C/D) is written to the AWG-Memory (AWG-
-    A/B/C/D). These two different behaviors (Skip Polynomial or Apply Polynomial) can be
-    written or readout:
-    0=Skip Polynomial/1=Apply Polynomial
-    @mam - character of poly memory A/B/C/D
-    @mode - ingeger indicating mode 0/1 (skip/apply)
-    """
-
-    def read_AWGApplyPolyMode(self, mem):
-        return self.write("C AWG-{} AP?".format(mem, mode))
-
-    def write_AWGApplyPolyMode(self, mem, mode):
-        return self.write("C AWG-{} AP {}".format(mem, mode))
-
-    """
-    Read or write the Adaptive Shift-Voltage per Step of the STEP-Generators (RMP-
-    A/B/C/D). A simple adaptive 2D-Scan (with linear y-adaption) can be performed by this
-    parameter. This Shift-Voltage gets applied to the AWG function (y-Axis) after each step of
-    the STEP-Generator (x-Axis). This is automatically done by linearly modifying the
-    polynomial coefficient a 0 (constant) after each step. This coefficient a 0 is calculated by
-    multiplying the Adaptive Shift-Voltage by the RAMP Cycles-Done. If the Adaptive Shift-
-    Voltage is zero (0) the polynomial will not be changed.
-    Since it is allowed to modify this Adaptive Shift-Voltage while a 2D-Scan is running, also
-    nonlinear adaptions can be easily implemented.
-    The Adaptive Shift-Voltage is a floating-point number in the range between -10.000000 V
-    and +10.000000 V per Step; the decimal point must be a period (point).
-    @mem - character indicating AWG memory A/B/C/D
-    @voltage - floating point number of voltage
-    """
-
-    def read_AWGShiftVoltage(self, mem):
-        return self.write("C AWG-{} SHIV?".format(mem, mode))
-
-    def write_AWGShiftVoltage(self, mem, voltage):
-        return self.write("C AWG-{} SHIV {}".format(mem, voltage))
-
-    ######################################################################################
-
-    #                  AWG CONTROL COMMANDS
-
-    ######################################################################################
-    """
-    Read or write the Boolean parameter AWG Normal/AWG Only, related to the Lower DAC
-    Board (AWG-A/B) or to the Higher DAC-Board (AWG-C/D). If AWG Only is selected (1), all
-    the other DAC-CHANNELs on this DAC-Board get blocked (---) and only the AWG-Channels
-    are active; this results in lower time-jitter for these AWG-Channels.
-    If AWG Normal is selected (0) the other DAC-CHANNELs on the corresponding DAC-Board
-    are free to be used for normal DAC operation (DAC) or as RAMP/STEP-Generator (RMP).
-    These two different options (AWG Normal or AWG Only) can be written or readout:
-    0=AWG Normal/1=AWG Only
-    @board - string indicating board, AB/CD for lower/higher board
-    @mode - integer of mode, 0/1 (awg normal, awg only)
-    """
-
-    def read_AWGNormalMode(self, board):
-        return self.write("C AWG-{} ONLY?".format(board))
-
-    def write_AWGNormalMode(self, board, mode):
-        return self.write("C AWG-{} ONLY {}".format(board, mode))
-
-    """
-    Control the mode of the four AWGs (AWG-A/B/C/D) by the two Boolean controls Start
-    and Stop. After setting theses controls, they are reset internally. AWG-AB allows
-    synchronous access to the two AWGs on the Lower DAC-Board and AWG-CD to the two
-    AWGs on the Higher DAC-Board. AWG-ALL makes synchronous access to all the four
-    AWGs. A synchronous start of multiple AWGs (AB/CD/ALL) can only be performed when
-    all these AWGs are in Idle-Mode.
-    @mem - character indicating the AWG memory or memories A/B/C/D/AB/CD/ALL
-    @mode - string indicating control mode, START/STOP
-    """
-
-    def write_AWGControlMode(self, mem, mode):
-        return self.write("C AWG-{} {}".format(mem, mode))
-
-    """
-    Readout the State (Idle/Running) of the four AWGs (AWG-A/B/C/D). The returned
-    integer number defines the actual state:
-    0=Idle/1=Running
-    @mem - character indicating AWG memory A/B/C/D
-    """
-
-    def read_AWGState(self, mem):
-        return self.write("C AWG-{} S?".format(mem))
-
-    """
-    Readout the AWG Cycles-Done of the four AWGs (AWG-A/B/C/D). The returned integer
-    number represents the completed AWG Cycles since the Start; it is in a range from 0 to
-    4E9. When the AWG is stopped (state Idle) the AWG Cycles-Done shows the last value;
-    when the AWG is started it is reset to zero (0). After power-up all the AWG Cycles-Done
-    counters are zero (0)
-    @mem - character indicating AWG memory A/B/C/D
-    """
-
-    def read_AWGCyclesDone(self, mem):
-        return self.write("C AWG-{} CD?".format(mem))
-
-    """
-    Readout the Duration/Period of a complete AWG-Cycle (AWG Memory_Size * AWG Clock-
-    Period) of the four AWGs (AWG-A/B/C/D). The unit of the Duration/Period is second
-    (sec). The minimum AWG Memory Size is 2 and the minimum AWG Clock-Period is 10E-
-    6 sec, resulting in a minimum Duration/Period is 20E-6 sec. The maximum
-    Duration/Period of 1.36E8 sec is given by the maximum AWG Memory Size of 34’000 and
-    the maximum AWG Clock-Period 4’000 sec (4E9 * 1E-6 sec).
-    The Duration/Period is a floating-point/exponential (E) number with a period (point) as
-    decimal separator
-    @mem - character indicating AWG memory A/B/C/D
-    """
-
-    def read_AWGDuration(self, mem):
-        return self.write("C AWG-{} DP?".format(mem))
-
-    """
-    Readout if the selected DAC-Channel of the AWG (AWG-A/B/C/D) is available (not used
-    by other AWG- or RAMP-Channels). The returned integer number gives the availability:
-    0=Not Available/1=Available
-    Note: A running AWG reads always “Not Available (0)” on its DAC-Channel.
-    @mem - character indicating AWG memory A/B/C/D
-    """
-
-    def read_AWGChannelAvailable(self, mem):
-        return self.write("C AWG-{} AVA?".format(mem))
+    # -------------------------------------------------
 
-    """
-    Read or write the Selected DAC-Channel for the AWG (AWG-A/B/C/D). Since the AWG-A
-    and the AWG-B are running on the Lower DAC-Board, their DAC-Channels can only be in
-    the range from 1 to 12. The AWG-C and the AWG-D are running on the Higher DAC-Board
-    and therefor the DAC-Channels are restricted to the range from 13 to 24.
-    After writing the Selected DAC-Channel, its availability can be checked
-    @mem - character indicating AWG memory A/B/C/D
-    @chan - integer of channel
-    """
-
-    def read_AWGSelectedChannel(self, mem):
-        return self.write("C AWG-{} CH?".format(mem))
-
-    def write_AWGSelectedChannel(self, mem, chan):
-        return self.write("C AWG-{} CH {}".format(mem, chan))
-
-    """
-    Read or write the AWG-Memory Size of the AWG (AWG-A/B/C/D) which is an integer
-    number in the range from 2 to 34’000. Each point of the AWG-Memory corresponds to a
-    24-bit DAC-Value.
-    The AWG streams this AWG-Memory Size number to the DAC when the AWG is started.
-    This is independent of the number of programmed AWG-Memory Addresses. If the user
-    has downloaded an AWG-Waveform consisting of 1’000 points, also the AWG-Memory
-    Size has to be set to 1’000.
-    @mem - character indicating AWG memory A/B/C/D
-    @size - integer of memory size
-    """
-
-    def read_AWGMemorySize(self, mem):
-        return self.write("C AWG-{} MS?".format(mem))
-
-    def write_AWGMemorySize(self, mem, size):
-        return self.write("C AWG-{} MS {}".format(mem, size))
-
-    """
-    Read or write the number of AWG Cycles-Set (0....4E9) of one of the four AWGs (AWG-
-    A/B/C/D). The integer number represents the number of AWG Cycles-Set until the AWG
-    gets stopped. If the number of AWG Cycles-Set is zero (0), an infinite number of AWG-
-    Cycles are done; the AWG runs until it is stopped by the user.
-    @mem - character indicating AWG memory A/B/C/D
-    @cycles - integer of number of cycles
-    """
-
-    def read_AWGCyclesSet(self, mem):
-        return self.write("C AWG-{} CS?".format(mem))
-
-    def write_AWGCyclesSet(self, mem, cycles):
-        return self.write("C AWG-{} CS {}".format(mem, cycles))
-
-    """
-    Read or write the External Trigger Mode of one of the four AWGs (AWG-A/B/C/D). This
-    sets the behavior of the four digital inputs “Trig In AWG-A/B/C/D” on the back panel of
-    the device. The external applied TTL trigger-signals can be programmed to have the
-    following four different functionalities:
-    - Disabled (0): The trigger-input has no impact.
-    - START only (1): The AWG starts on a rising edge of the TTL-signal.
-    - START-STOP (2): The AWG starts on a rising edge and stops on a falling edge.
-    - SINGLE-STEP (3): The AWG starts on a rising edge of the TTL-signal and the AWG makes
-    a single step for each rising edge. Therefore, the AWG Clock is defined by the external
-    applied TTL trigger-signal from DC up to maximum 100 kHz (PW minimum 2 μsec).
-    @mem - character indicating AWG memory A/B/C/D
-    @mode - integer indicating mode 0/1/2/3 (disabled/START only/START-STOP/SINGLE STEP)
-    """
-
-    def read_AWGExtTriggerMode(self, mem):
-        return self.write("C AWG-{} TM?".format(mem))
-
-    def write_AWGExtTriggerMode(self, mem, mode):
-        return self.write("C AWG-{} TM {}".format(mem, mode))
-
-    """
-    Read or write the Clock-Period [μsec] (10....4E9) of the Lower (AWG-A+B) or the Higher
-    DAC-Board (AWG-C+D). This integer number represents the AWG Clock-Period in μsec
-    (1E-6 sec) and the minimum is 10 μsec and the maximum 4E9 μsec which corresponds to
-    4’000 sec (4E9 * 1E-6 sec). The resolution of the Clock-Period is 1 μsec.
-    The Lower AWG Clock-Period [μsec] is common for the AWG-A and the AWG-B, running
-    on the Lower DAC-Board. The Higher AWG Clock-Period [μsec] is common for the AWG-C
-    and the AWG-D, running on the Higher DAC-Board.
-    @board - string indicating AWG board, AB/CD (lower, higher)
-    @T - integer specifying period
-    """
-
-    def read_AWGClkPeriod(self, board):
-        return self.write("C AWG-{} CP?".format(board))
-
-    def write_AWGClkPeriod(self, board, T):
-        return self.write("C AWG-{} CP {}".format(board, T))
-
-    """
-    Read or write the Control-Status (ON/OFF) of the external digital AWG 1 MHz Clock
-    Reference TTL signal (on the D-SUB connector on the back-panel). This 1 MHz reference
-    clock is internally used for the AWGs and it can be used to synchronize other devices with
-    the LNHR DAC II
-    @mode - integer of mode 0/1 (OFF/ON)
-    """
-
-    def read_AWGClkRefState(self):
-        return self.write("C AWG-1MHz?")
-
-    def write_AWGClkRefState(self, mode):
-        return self.write("C AWG-1MHz {}".format(mode))
-
-    ######################################################################################
-
-    #                  STANDARD WAVEFORM GENERATION (SWG) CONTROL COMMANDS
-
-    ######################################################################################
-    """
-    Read or write the Boolean parameter SWG Mode which can be either “Generate New
-    Waveform” (0) or “Use Saved Waveform” (1). When the default Mode “Generate New
-    Waveform” is selected, a new waveform can be generated by using the Standard
-    Waveforms and the Wave-Functions. In the “Use Saved Waveform” Mode the previously
-    saved waveform (WAV-S) is recalled and the selected Wave-Functions can be applied on
-    this recalled waveform; e.g., it can be copied to a Wave-Memory (WAV-A/B/C/D).
-    @mode - integer of SWG mode 0/1 (use saved waveform/generate new waveform)
-    """
-
-    def read_SWGMode(self):
-        return self.write("C SWG MODE?")
-
-    def write_SWGMode(self, mode):
-        return self.write("C SWG MODE {}".format(mode))
-
-    """
-    Read or write the Standard Waveform Function to be generated. The following eight
-    different functions can be selected and are represented by these integer numbers:
-    0 = Sine function – for a Cosine function select a Phase [°] of 90°
-    1 = Triangle function
-    2 = Sawtooth function
-    3 = Ramp function
-    4 = Pulse function – the parameter Duty-Cycle [%] is applied
-    5 = Gaussian Noise (Fixed) – always the same seed for the random/noise-generator
-    6 = Gaussian Noise (Random) – random seed for the random/noise-generator
-    7 = DC-Voltage only – a fixed voltage is generated
-    @func - integer specifying function to be written, 0/1/2/3/4/5/6/7 (see above for coding scheme)
-    """
-
-    def read_SWGFunction(self):
-        return self.write("C SWG WF?")
-
-    def write_SWGFunction(self, func):
-        return self.write("C SWG WF {}".format(func))
-
-    """
-    Read or write the Desired AWG-Frequency [Hz] of the Wave- and AWG-function.
-    Sometimes it isn’t possible to reach exact this frequency; see also “Keep / Adapt AWG
-    Clock-Period” and the “Nearest AWG-Frequency [Hz]”. The Desired AWG-Frequency [Hz]
-    is a floating-point number in the range between 0.001 Hz and 10’000 Hz; the decimal
-    point must be a period (point).
-    At the maximum Desired AWG-Frequency of 10’000 Hz (period 100 μsec) the Standard
-    Waveform consists of 10 points at an AWG Clock-Period of 10 μsec.
-    @freq - floating point number specifying frequency in Hz
-    """
-
-    def read_SWGDesFrequency(self):
-        return self.write("C SWG DF?")
-
-    def write_SWGDesFrequency(self, freq):
-        return self.write("C SWG DF {}".format(freq))
-
-    """
-    Read or write the Boolean parameter Keep/Adapt AWG Clock-Period. To reach the
-    Desired AWG-Frequency as close as possible, select Adapt AWG Clock-Period.
-    If Adapt AWG Clock-Period (1) is selected, the AWG Clock-Period gets adapted to meet the
-    Desired AWG Frequency as close as possible. The update of the AWG Clock-Period on the
-    corresponding DAC-Board (Lower or Higher) is automatically done, when the Wave-
-    Memory is written to the AWG-Memory; see AWG Clock-Period [μsec] in the AWG
-    CONTROL Commands.
-    If Keep AWG Clock-Period (0) is selected, the AWG Clock-Period of the corresponding
-    DAC-Board (depending on the Selected Wave-Memory A/B/C/D) is read and used for the
-    waveform generation. At the standard AWG Clock-Period of 10 μsec the minimal AWG
-    Frequency is 2.941 Hz; this is given by the maximum AWG-Memory Size of 34’000 points
-    times the AWG Clock-Period of 10 μsec. Lower AWG frequencies can be reached by
-    selecting higher AWG Clock-Periods.
-    These two different options (Keep/Adapt AWG Clock-Period) can be written or readout:
-    0=Keep AWG Clock-Period/1=Adapt AWG Clock-Period
-    @mode - integer of adaptive clock mode, 0/1 (keep/adapt)
-    """
-
-    def read_SWGApdativeClk(self):
-        return self.write("C SWG ACLK?")
-
-    def write_SWGAdaptiveClk(self, mode):
-        return self.write("C SWG ACLK {}".format(mode))
-
-    """
-    Read or write the Amplitude [Vp] parameter of the generated Standard Waveform. This
-    value corresponds to the peak-voltage of the generated Standard Waveform. For
-    Gaussian-Noise the Amplitude [Vp] corresponds to the RMS-value (Sigma). The
-    Amplitude [Vp] is a floating-point number in the range between -50.000000 V and
-    +50.000000 V; the decimal point must be a period (point). A negative Amplitude
-    corresponds to a shift in Phase [°] of 180°. The ±50 V range in Amplitude [Vp] extends the
-    flexibility in generating clipping-waveforms, also by applying a DC-Offset Voltage.
-    @voltage - floating point number specifying the Vp parameter
-    """
-
-    def read_SWGAmplitude(self):
-        return self.write("C SWG AMP?")
-
-    def write_SWGAmplitude(self, voltage):
-        return self.write("C SWG AMP {}".format(voltage))
-
-    """
-    Read or write the DC-Offset Voltage [V] parameter of the generated Standard Waveform.
-    The DC-Offset Voltage is added to the function and therefore shifts the waveform in the
-    amplitude. If "DC-Voltage only" is selected as function, this parameter is used as fixed DC-
-    Voltage.
-    The DC-Offset Voltage is a floating-point number in the range between -10.000000 V and
-    +10.000000 V; the decimal point must be a period (point)
-    @voltage - floating point number specifying the DC offset voltage
-    """
-
-    def read_SWGDCOffset(self):
-        return self.write("C SWG DCV?")
-
-    def write_SWGDCOffset(self, voltage):
-        return self.write("C SWG DCV {}".format(voltage))
-
-    """
-    Read or write the Phase [°] parameter of the generated Standard Waveform. The Phase
-    shifts the generated waveform in time; it isn’t applicable for Gaussian-Noise, Ramp and
-    DC-Voltage only. A Sine with a Phase of 90° corresponds to a Cosine.
-    The Phase [°] is a floating-point number in the range between -360.0000° and
-    +360.0000°; the decimal point must be a period (point).
-    @angle - floating point number indicating the phase angle
-    """
-
-    def read_SWGPhase(self):
-        return self.write("C SWG PHA?")
-
-    def write_SWGPhase(self, angle):
-        return self.write("C SWG PHA {}".format(angle))
-
-    """
-    Read or write the Duty-Cycle [%] parameter for the generation of the Pulse-Waveform.
-    The Duty-Cycle is only applicable for the Pulse function. A 50% Duty-Cycle results in a
-    Square Wave; the higher the Duty-Cycle [%] the longer a high-level is applied.
-    The Duty-Cycle [%] is a floating-point number in the range between 0.000% and
-    100.000%; the decimal point must be a period (point).
-    @dc - floating point number specifying the duty cycle percent
-    """
-
-    def read_SWGDutyCycle(self):
-        return self.write("C SWG DUC?")
-
-    def write_SWGDutyCycle(self, dc):
-        return self.write("C SWG DUC {}".format(dc))
-
-    """
-    Read the Wave-Memory Size of the generated Standard Waveform. This Wave-Memory
-    Size will also be the AWG-Memory Size, after writing to the AWG-Memory. The Wave-
-    Memory Size is an integer number in the range from 10 to 34’000 and is calculated from
-    the Desired Frequency [Hz] parameters of the Standard Waveform Generation.
-    At the maximum frequency of 10’000 Hz a minimum Wave-Memory Size of 10 is reached
-    while the AWG Clock-Period must be 10 μsec. Each point of the Wave-Memory
-    corresponds to a DAC-Voltage in a range of ±10 V
-    """
-
-    def read_SWGMemSize(self):
-        return self.write("C SWG MS?")
-
-    """
-    Read the Nearest AWG-Frequency [Hz] which can be reached as close as possible to the
-    Desired AWG-Frequency [Hz]; is a floating-point number in the range between 0.001 Hz
-    and 10’000 Hz.
-    If it must be optimized, select "Adapt AWG-CLK" (see above). Not all desired AWG-
-    Frequencies can be achieved, since the AWG-Clock Period can only be adjusted with a
-    resolution of 1 μsec.
-    """
-
-    def read_SWGNearestFreq(self):
-        return self.write("C SWG NF?")
-
-    """
-    Read the Waveform Clipping Status of the Generated Standard Waveform (SWG). If the
-    amplitude of the generated waveform exceeds the maximum voltage of ± 10 V anywhere,
-    the Clipping is set (1). If the Amplitude is always within the ± 10 V range (which means
-    OK), the Clipping is not reset (0).
-    0=Not Clipping/1=Clipping
-    """
-
-    def read_SWGClippingStatus(self):
-        return self.write("C SWG CLP?")
-
-    """
-    Read the SWG/AWG Clock-Period [μsec] (10....4E9), which was used for the Standard
-    Waveform Generation (SWG). This integer number represents the AWG Clock-Period in
-    μsec (1E-6 sec) and the resolution is 1 μsec. If “Keep AWG Clock-Period” is selected, the
-    AWG Clock-Period of the corresponding DAC-Board is read. If “Adapt AWG Clock-Period”
-    is selected, the SWG/AWG Clock-Period is adapted to meet the Desired AWG Frequency
-    as close as possible.
-    """
-
-    def read_SWGClkPeriod(self):
-        return self.write("C SWG CP?")
-
-    """
-    Read or write the Selected Wave-Memory (WAV-A/B/C/D) to which the Wave-Function
-    will be applied. If Keep AWG Clock-Period is selected above, the AWG Clock-Period of the
-    corresponding DAC-Board is read: From the Lower DAC-Board if Wave-Memory A or B is
-    selected and from the Higher DAC-Board if Wave-Memory C or D is selected.
-    @mem - integer specifying the WAV memory, 0/1/2/3 (A/B/C/D)
-    """
-
-    def read_SWGMemSelected(self):
-        return self.write("C SWG WMEM?")
-
-    def write_SWGMemSelected(self, mem):
-        return self.write("C SWG WMEM {}".format(mem))
-
-    """
-    Read or write the Selected Wave-Function which will be applied on the generated
-    Standard Waveform and the Selected Wave-Memory when “Apply to Wave-Memory Now”
-    is operated.
-    The following Wave-Functions are available: COPY, APPEND, SUM, MULTIPLY and
-    DIVIDE. When COPY Waveform is selected, the actual Wave-Memory is overwritten. The
-    other four Wave-Functions can be applied to START or to the END of Wave-Memory.
-    With these Wave-Functions complex and user-specific waveforms can be created in the
-    Wave-Memory. Multiple Wave-Functions can be applied on different generated Standard
-    Waveforms to reach the desired user-specific waveform.
-    These nine different Wave-Functions are available and are represented by the following
-    integer numbers:
-    0 = COPY to Wave-MEM -> Overwrite
-    1 = APPEND to Wave-MEM @START
-    2 = APPEND to Wave-MEM @END
-    3 = SUM Wave-MEM @START
-    4 = SUM Wave-MEM @END
-    5 = MULTIPLY Wave-MEM @START
-    6 = MULTIPLY Wave-MEM @END
-    7 = DIVIDE Wave-MEM @START
-    8 = DIVIDE Wave-MEM @END
-    @func - integer specifying the function to perform, 0/1/2/3/4/5/6/7/8 (see above for coding scheme)
-    """
+    def __get_awg_time_axis(self, awg: str) -> list[float]:
+        """
+        Automatically creates the time axis for the saved waveform.
 
-    def read_SWGSelectedFunc(self):
-        return self.write("C SWG WFUN?")
+        Parameters:
+        awg: selected AWG
 
-    def write_SWGSelectedFunc(self, func):
-        return self.write("C SWG WFUN {}".format(func))
+        returns:
+        list: list of time values for each voltage saved in the AWG waveform in s
+        """
 
-    """
-    Read or write the Boolean parameter No Linearization/Linearization for actual DAC-
-    Channel. When “Copy to Wave-Memory Now” is performed, the actual selected AWG DAC-
-    Channel gets registered for the later linearization when the WAV-Memory is written to
-    the AWG-Memory. In this case the AWG-Waveform gets also linearized after applying the
-    polynomial. If No Linearization is selected the DAC-Channel is registered as a zero (0)
-    which indicates that no linearization will be done when the WAV-Memory is written to
-    the AWG-Memory; this slightly increases the write performance.
-    These two different options (No Linearization/Linearization for actual DAC-Channel) can
-    be written or readout:
-    0=No Linearization/1=Linearization for actual DAC-Channel
-    @mode - integer specifying linearization mode, 0/1 (no lin/lin)
-    """
-
-    def read_SWGLinearization(self):
-        return self.write("C SWG LIN?")
-
-    def write_SWGLinearization(self, mode):
-        return self.write("C SWG LIN {}".format(mode))
-
-    """
-    The Selected Wave-Function gets applied to the Selected Wave-Memory (WAV-A/B/C/D).
-    At this moment, the actual selected AWG DAC-Channel gets registered if “Linearization for
-    actual DAC-Channel” is selected (see above). After setting this control, it gets reset
-    internally.
-    """
-
-    def apply_SWGFunction(self):
-        return self.write("C SWG APPLY")
-
-    ######################################################################################
-
-    #                  WAVE CONTROL COMMANDS
-
-    ######################################################################################
-    """
-    Read the Size of one of the five Wave-Memories (WAV-A/B/C/D/S). This Wave-Memory
-    Size will also be the AWG-Memory Size, after writing to the AWG-Memory. The Wave-
-    Memory Size is an integer number in the range from 0 to 34’000. A Wave-Memory Size of
-    zero (0) indicates that this Wave-Memory is cleared.
-    Note: For optimal performance, keep the Wave-Memory Size as small as possible and
-    always clear unused Wave-Memories.
-    @mem - character indicating the wave memory, A/B/C/D/S 
-    """
-
-    def read_WAVMemSize(self, mem):
-        return self.write("C WAV-{} MS?".format(mem))
-
-    """
-    Clear the selected Wave-Memory (WAV-A/B/C/D/S) and set the Wave-Memory Size to
-    zero (0). The WAV-S is the Saved Waveform. After setting this control, it gets reset
-    internally
-    @mem - character indicating the wave memory, A/B/C/D/S 
-    """
-
-    def clear_WAVMem(self, mem):
-        return self.write("C WAV-{} CLR".format(mem))
-
-    """
-    Save the selected Wave-Memory (WAV-A/B/C/D) to the internal volatile memory on the
-    LNHR DAC II; it is called WAV-S.
-    @mem - character indicating the wave memory, A/B/C/D/S 
-    """
-
-    def save_WAVMem(self, mem):
-        return self.write("C WAV-{} SAVE".format(mem))
+        board = {"a": "ab", "b": "ab", "c": "cd", "d": "cd"}
+        memory_size = self.__controller.get_wav_memory_size(awg)
+        clock_period = self.__controller.get_awg_clock_period(board[awg])
 
-    """
-    Read the corresponding DAC-Channel for the Linearization of one of the four Wave-
-    Memories (WAV-A/B/C/D). The Linearization for this DAC-Channel is done when the
-    Wave-Memory is written to the AWG-Memory. If "No Linearization" was selected when
-    the waveform was copied to the Wave-Memory, the corresponding DAC-Channel is 0
-    (zero). The DAC-Channel for Linearization is an integer number in the range from 0 to 24;
-    the not existing DAC-Channel 0 (zero) means that no linearization gets applied.
-    @mem - character indicating the wave memory, A/B/C/D/S 
-    """
+        increment = clock_period / 1000000
+        time_axis = []
+        for index in range(0, memory_size):
+            time_axis.append(round(index * increment, 6))
 
-    def read_WAVMemLinChannel(self, mem):
-        return self.write("C WAV-{} LINCH?".format(mem))
+        return time_axis
 
-    """
-    Write the Wave-Memory (WAV-A/B/C/D) to the corresponding AWG-Memory (AWG-
-    A/B/C/D). After setting this control, it gets reset internally. The Polynomial is only applied
-    when the corresponding Boolean parameter "Apply Polynomial" is selected (see chapter
-    “2D-Scan CONTROL Commands”).
-    Note: The Saved Waveform (WAV-S) has first to be copied to one of the four Wave-
-    Memories (WAV-A/B/C/D) before it can be written to the corresponding AWG-Memory.
-    To recalled the Saved Waveform (WAV-S) select “Use Saved Waveform” in the SWG Mode
-    selection
-    @mem - character indicating the wave memory, A/B/C/D/S 
-    """
+    # -------------------------------------------------
 
-    def write_WAVMemToAWGMem(self, mem):
-        return self.write("C WAV-{} WRITE".format(mem))
+    def __get_awg_waveform(self, awg: str) -> list[float]:
+        """
+        Read the AWG waveform from device memory.
 
-    """
-    During writing the Wave-Memory (WAV-A/B/C/D) to the corresponding AWG-Memory
-    (AWG-A/B/C/D) this Busy flag is set (1); if it is Idle state the value is zero (0).
-    0=Idle/1=Busy (writing WAV- to AWG-Memory
-    @mem - character indicating the wave memory, A/B/C/D/S 
-    """
+        Parameters:
+        awg: selected AWG
 
-    def read_WAVBusyWriting(self, mem):
-        return self.write("C WAV-{} BUSY?".format(mem))
+        Returns:
+        list: AWG waveform values in V (Volt)
+        """
 
-    ####################################################################
+        memory = []
+        block_size = 1000  # number of points read by get_wav_memory_block()
+        memory_size = self.__controller.get_wav_memory_size(awg)
+        adress_range_limit = memory_size // block_size
+        if memory_size % block_size != 0:
+            adress_range_limit += 1
 
-    #               SPECIAL AND COMPOUND FUNCTIONS
+        # read memory blocks (1000 points) instead of single adresses for faster reading
+        for address in range(0, adress_range_limit):
+            data = self.__controller.get_wav_memory_block(awg, address * block_size)
+            last_value = data.pop()
+            while last_value == "NaN":
+                last_value = data.pop()
+            data.append(last_value)
+            memory.extend(data)
 
-    ####################################################################
+        if len(memory) != memory_size:
+            raise MemoryError("Error occured while reading the devices memory.")
 
-    """
-    Creates a linear scan of the given parameter (for example a DAC channel), from a START value
-    to a STOP value, with num_points pauses/measurements. A time delay is made before a measured 
-    dependent parameter is read and stored into a list.  The list is returned after the scan.
-    @param - the independent parameter.  Must have a set() method
-    @start - the starting value for the scan
-    @stop - the stopping value for the scan
-    @num_points - the number of points within the scan.
-    @delay - the time to pause at each point before reading any dependent parameters.
-    @measured_param - the dependent parameter to measure.  Must have a get() method.
-    """
+        return memory
 
-    def scan1D(self, param, start, stop, num_points, delay, measured_param):
-        data = []
-        increment = (stop - start) / (num_points - 1)
-        current = start
-
-        values = []
-        for i in range(num_points - 1):
-            values.append(current)
-            current += increment
-        values.append(stop)
-        for val in values:
-            param.set(val)
-            time.sleep(delay)
-            m = measured_param.get()
-            print(m)
-            data.append(m)
-        return data
+    # -------------------------------------------------
 
-    """
-    Creates a 2D linear scan of two independent parameters.  The "outer-loop" parameter is param1, and runs through it's
-    scan only once. The "inner-loop" parameter, param2, runs through a scan each time param1 steps. At each step, 
-    the dependent parameters, stored in a list, are read and recorded.
-    @param1 - the independent outer-loop parameter.  Must have a set() method
-    @start1 - the starting value for the outer scan
-    @stop1 - the stopping value for the outer scan
-    @num_points1 - the number of points within the outer scan.
-    @delay1 - the time to pause at each point of the outer scan before reading any dependent parameters.
-    @param2 - the independent inner-loop parameter.  Must have a set() method
-    @start2 - the starting value for the inner scan
-    @stop2 - the stopping value for the inner scan
-    @num_points2 - the number of points within the inner scan.
-    @delay2 - the time to pause at each point of the inner scan before reading any dependent parameters.
-    @measured_params_list - a list of dependent parameters. Each must have a get() method
-    """
+    def __set_awg_waveform(self, awg: str, waveform: list[float]) -> None:
+        """
+        Write an AWG waveform into device memory. Memory is cleared before writing.
 
-    def scan2D(
-        self,
-        param1,
-        start1,
-        stop1,
-        num_points1,
-        delay1,
-        param2,
-        start2,
-        stop2,
-        num_points2,
-        delay2,
-        measured_params_list,
+        Parameters:
+        awg: selected AWG
+        waveform: list of voltages (+/- 10.000000 V)
+        """
+
+        # check for lock
+        validator = BaspiLnhrdac2LockingValidator(self)
+        validator.validate(waveform)
+
+        # check clock period
+        dac_board = {"a": "ab", "b": "ab", "c": "cd", "d": "cd"}
+        clock_period = self.__controller.get_awg_clock_period(dac_board[awg])
+
+        self.__controller.clear_wav_memory(awg)
+
+        for address in range(0, len(waveform)):
+            self.__controller.set_wav_memory_value(
+                awg, address, float(waveform[address])
+            )
+
+        sleep(0.2)  # sleep bc bad firmware
+        memory_size = self.__controller.get_wav_memory_size(awg)
+
+        if len(waveform) != memory_size:
+            raise MemoryError("Error occured while writing to the devices memory.")
+
+        self.__controller.write_wav_to_awg(awg)
+        while self.__controller.get_wav_memory_busy(awg):
+            pass
+
+        # reset clock period bc gets changed by a ghost while write_wav_to_awg()
+        if self.__controller.get_awg_clock_period(dac_board[awg]) != clock_period:
+            self.__controller.set_awg_clock_period(dac_board[awg], clock_period)
+
+    # -------------------------------------------------
+
+    @staticmethod
+    def __get_parser_awg_enable(val: bool) -> str:
+        """
+        Parsing method for the parameter "enable". Ensures correct function of val_mapping = create_on_off_val_mapping().
+        Output of enable.get() has to be a valid input of enable.set().
+        """
+
+        if val:
+            return "START"
+        else:
+            return "STOP"
+
+
+# class ----------------------------------------------------------------
+
+
+@dataclass
+class BaspiLnhrdac2SWGConfig:
+    """
+    Dataclass to pass a configuration of the LNHR DAC II SWG module.
+
+    Properties:
+    shape: "sine", "cosine, "triangle", "sawtooth", "ramp", "rectangle", "pulse", "fixed noise", "random noise" or "DC"
+    frequency: signal frequency in Hz (0.001 Hz - 10000 Hz)
+    amplitude: signal amplitude in V (+/- 10.000 V)
+    offset: signal DC-offset (+/- 10.000 V)
+    phase: signal phaseshift in ° (deg) (+/- 360.000°)
+    dutycycle: signal dutycycle in % (0.0 - 100.0), only applicable with shape "pulse"
+    """
+
+    shape: str
+    frequency: float
+    amplitude: float
+    offset: float
+    phase: float
+    dutycycle: float
+
+    # -------------------------------------------------
+
+    def __post_init__(self):
+        """default values for unspecified values"""
+        if isinstance(self.shape, property):
+            self.shape = "sine"
+        if isinstance(self.frequency, property):
+            self.frequency = 100.0
+        if isinstance(self.amplitude, property):
+            self.amplitude = 1.0
+        if isinstance(self.offset, property):
+            self.offset = 0.0
+        if isinstance(self.phase, property):
+            self.phase = 0.0
+        if isinstance(self.dutycycle, property):
+            self.dutycycle = 0.0
+
+    # -------------------------------------------------
+
+    def __check_min_max(
+        self, val: int | float, min: int | float, max: int | float, prop: str
+    ) -> None:
+        """check validity of properties"""
+        if isinstance(val, property):
+            # do nothing if value is not specified
+            return
+
+        if not isinstance(val, (int, float)):
+            raise ValueError(f"Configuration value {prop} is of not the correct type.")
+        if val < min:
+            raise ValueError(
+                f"Configuration value {prop} is too small. Increase {prop} to {min}."
+            )
+        if val > max:
+            raise ValueError(
+                f"Configuration value {prop} is too big. Decrease {prop} to {max}."
+            )
+
+    # -------------------------------------------------
+
+    @property
+    def frequency(self) -> float:
+        return self._frequency
+
+    @frequency.setter
+    def frequency(self, val: float) -> None:
+        self.__check_min_max(val, min=0.001, max=10_000.0, prop="frequency")
+        self._frequency = val
+
+    @property
+    def amplitude(self) -> float:
+        return self._amplitude
+
+    @amplitude.setter
+    def amplitude(self, val: float) -> None:
+        self.__check_min_max(val, min=-50.0, max=50.0, prop="amplitude")
+        self._amplitude = val
+
+    @property
+    def offset(self) -> float:
+        return self._offset
+
+    @offset.setter
+    def offset(self, val: float) -> None:
+        self.__check_min_max(val, min=-10.0, max=10.0, prop="offset")
+        self._offset = val
+
+    @property
+    def phase(self) -> float:
+        return self._phase
+
+    @phase.setter
+    def phase(self, val: float) -> None:
+        self.__check_min_max(val, min=-360.0, max=360.0, prop="phase")
+        self._phase = val
+
+    @property
+    def dutycycle(self) -> float:
+        return self._dutycycle
+
+    @dutycycle.setter
+    def dutycycle(self, val: float) -> None:
+        self.__check_min_max(val, min=0.0, max=100.0, prop="dutycycle")
+        self._dutycycle = val
+
+
+# class ----------------------------------------------------------------
+
+
+class BaspiLnhrdac2SWG(InstrumentModule):
+    def __init__(
+        self, parent: VisaInstrument, name: str, controller: BaselDac2Controller
     ):
-        data = []  # return variable
-        increment1 = (stop1 - start1) / (num_points1 - 1)
-        increment2 = (stop2 - start2) / (num_points2 - 1)
+        """
+        Class defining the Standard Waveform Generator (SWG) module of the LNHR DAC II with all its Qcodes Parameters.
+        The SWG can be used to create a waveform, which is then outputted by an AWG.
 
-        current1 = start1
-        current2 = start2
-        values1 = []
-        values2 = []
-        for i in range(num_points1 - 1):
-            values1.append(current1)
-            current1 += increment1
-        values1.append(stop1)
-        for i in range(num_points2 - 1):
-            values2.append(current2)
-            current2 += increment2
-        values2.append(stop2)
+        SWG-Parameters:
+        configuration (object of type BaspiLnhrdac2SWGConfig, to configure the SWG)
+        apply (A, B, C or D, applies the configured waveform and saves it to the AWG A, B, C or D)
 
-        for val1 in values1:
-            param1.set(val1)
-            time.sleep(delay1)
-            line_data = []
-            for val2 in values2:
-                param2.set(val2)
-                time.sleep(delay2)
-                data_point = []
-                for p in measured_params_list:
-                    data_point.append(p.get())
-                line_data.append(tuple(data_point))
-            # append data list for scan line into return variable
-            data.append(line_data)
-        return data
+        Parameters:
+        parent: instrument this channel is a part of
+        name: name of the module
+        controller: the controller the instrument uses for its communication
+        """
 
-    def handleDACSetErrors(code):
-        num = int(code)
-        if num == 0:
-            return num
-        elif num == 1:
-            print("Invalid DAC-Channel")
-        elif num == 2:
-            print("Missing DAC-Value, Status or BW")
-        elif num == 3:
-            print("DAC-Value out of range")
-        elif num == 4:
-            print("Mistyped")
-        elif num == 5:
+        super().__init__(parent, name)
+        self.__controller = controller
+
+        self.configuration = self.add_parameter(
+            name="configuration", get_cmd=None, set_cmd=self.__set_swg_configuration
+        )
+
+    # -------------------------------------------------
+
+    def __set_swg_configuration(self, config: BaspiLnhrdac2SWGConfig) -> None:
+        """
+        Create a waveform using the standard waveform generator. The resulting waveform is automatically written into the waveform memory.
+
+        config-Attributes:
+        shape: "sine", "cosine, "triangle", "sawtooth", "ramp", "rectangle", "pulse", "fixed noise", "random noise" or "DC"
+        frequency: signal frequency in Hz (0.001 Hz - 10000 Hz)
+        amplitude: signal amplitude in V (+/- 10.000 V)
+        offset: signal DC-offset (+/- 10.000 V)
+        phase: signal phaseshift in ° (deg) (+/- 360.000°)
+        dutycycle: signal dutycycle in % (0.0 - 100.0), only applicable with shape "pulse"
+
+        Parameters:
+        awg: selected AWG
+        config: object containing SWG configuration
+        """
+
+        self.__controller.set_swg_new(True)
+
+        # always use "adapt clock" here, clock gets checked again in swg.apply
+        self.__controller.set_swg_adapt_clock(True)
+
+        awg_shapes = {
+            "sine": 0,
+            "cosine": 0,
+            "triangle": 1,
+            "sawtooth": 2,
+            "ramp": 3,
+            "rectangle": 4,
+            "pulse": 4,
+            "fixed noise": 5,
+            "random noise": 6,
+            "DC": 7,
+        }
+
+        if config.shape not in awg_shapes:
+            raise ValueError(
+                f"Value '{config.shape}' is invalid. Valid values are: {list(awg_shapes.keys())}."
+            )
+
+        # specify waveform
+        self.__controller.set_swg_shape(awg_shapes[config.shape])
+        self.__controller.set_swg_desired_frequency(config.frequency)
+        self.__controller.set_swg_amplitude(config.amplitude)
+        self.__controller.set_swg_offset(config.offset)
+
+        if config.shape == "cosine":
+            self.__controller.set_swg_phase(config.phase + 90.0)
+        else:
+            self.__controller.set_swg_phase(config.phase)
+        if config.shape == "rectangle":
+            self.__controller.set_swg_dutycycle(50.0)
+        elif config.shape == "pulse":
+            self.__controller.set_swg_dutycycle(config.dutycycle)
+
+    # -------------------------------------------------
+
+    def apply(self, awg: str) -> None:
+        """
+        Apply the SWG configuration to an AWG waveform.
+
+        Parameters:
+        awg: selected AWG
+        """
+
+        awg = awg.lower()
+
+        # set awgX.length parameter, also checks if AWG is locked
+        wav_memory_size = self.__controller.get_wav_memory_size(awg)
+        if awg == "a":
+            self.parent.awga.length.set(wav_memory_size)
+        elif awg == "b":
+            self.parent.awgb.length.set(wav_memory_size)
+        elif awg == "c":
+            self.parent.awgc.length.set(wav_memory_size)
+        elif awg == "d":
+            self.parent.awgd.length.set(wav_memory_size)
+
+        self.__controller.set_swg_wav_memory(awg)
+
+        # decide on keep or adapt clock period
+        other_awg = {"a": "b", "b": "a", "c": "d", "d": "c"}
+        other_awg_size = self.__controller.get_awg_memory_size(other_awg[awg])
+        if other_awg_size > 2:
+            self.__controller.set_swg_adapt_clock(False)
+        else:
+            self.__controller.set_swg_adapt_clock(True)
+
+        desired_frequency = self.__controller.get_swg_desired_frequency()
+        nearest_frequency = self.__controller.get_swg_nearest_frequency()
+        if nearest_frequency != desired_frequency:
             print(
-                "Writing not allowed (Ramp/Step-Generator or AWG are running on this DAC-Channel)"
+                f"Frequency of {desired_frequency} Hz cannot be reached with the current settings. "
+                + f"A frequency of {nearest_frequency} Hz is used instead. "
+                + f"Changing AWG or clearing unused AWG waveforms might resolve this issue."
             )
-        return num
 
-    def handleAWGSetErrors(code):
-        num = int(code)
-        if num == 0:
-            return num
-        if num == 1:
-            print("Invalid AWG-Memory")
-        elif num == 2:
-            print("Missing AWG-Address and/or AWG-Value")
-        elif num == 3:
-            print("AWG-Address and/or AWG-Value out of range")
-        elif num == 4:
-            print("Mistyped")
-        return num
+        # apply SWG configuration to AWG waveform
+        self.__controller.apply_swg_operation()
+        self.__controller.write_wav_to_awg(awg)
+        while self.__controller.get_wav_memory_busy(awg):
+            pass
 
-    def handleWAVSetErrors(code):
-        num = int(code)
-        if num == 0:
-            return num
-        if num == 1:
-            print("Invalid WAV-Memory")
-        elif num == 2:
-            print("Missing WAV-Address and/or WAV-Voltage")
-        elif num == 3:
-            print("WAV-Address and/or WAV-Voltage out of range")
-        elif num == 4:
-            print("Mistyped")
-        return num
+        awg_memory_size = self.__controller.get_awg_memory_size(awg)
+        if awg_memory_size != wav_memory_size:
+            if awg == "a":
+                self.parent.awga.length.set(awg_memory_size)
+            elif awg == "b":
+                self.parent.awgb.length.set(awg_memory_size)
+            elif awg == "c":
+                self.parent.awgc.length.set(awg_memory_size)
+            elif awg == "d":
+                self.parent.awgd.length.set(awg_memory_size)
 
-    def handlePOLYSetErors(code):
-        num = int(code)
-        if num == 0:
-            return num
-        if num == 1:
-            print("Invalid Polynomial Name")
-        elif num == 2:
-            print("Missing Polynomial Coefficient(s)")
-        elif num == 4:
-            print("Mistyped")
-        return num
 
+# class ----------------------------------------------------------------
+
+
+@dataclass
+class BaspiLnhrdac2Fast2dConfig:
     """
-    After each CONTROL Write command, an error code will be returned.  '0' indicates no error. 
-    If you want an interpretation printed to standard output, pass the code into this method.
-    Additional actions should be taken in the code surrounding the write function.
-    You should at least check for '0', to know that your program can continue running normally.
+    Dataclass to pass a configuration of the LNHR DAC II Fast Scan 2D module.
+
+    Properties:
+    x_channel: channel of the x-axis (1 - 12)
+    x_start_voltage: starting voltage of the x-axis in V (+/- 10.000000 V)
+    x_stop_voltage: ending voltage of the x-axis in V (+/- 10.000000 V)
+    x_steps: number of steps the x-axis voltage is incremented
+    y_channel: channel of the y-axis (1 - 12)
+    y_start_voltage: starting voltage of the x-axis in V (+/- 10.000000 V)
+    y_stop_voltage: ending voltage of the x-axis in V (+/- 10.000000 V)
+    y_steps: number of steps the y-axis voltage is incremented
+    acquisition_delay: time for which each voltage step is outputted in s
+    adaptive_shift: voltage shift in V which is applied to the x-axis, after every y-axis sweep (+/- 10.000000 V)
     """
 
-    def handleCONTROLWriteErrors(code):
-        num = int(code)
-        if num == 0:
-            return num
-        if num == 1:
-            print("Invalid DAC-Channel")
-        elif num == 2:
-            print("Invalid Parameter")
-        elif num == 4:
-            print("Mistyped")
-        elif num == 5:
-            print("Writing not allowed")
+    x_channel: int
+    x_start_voltage: float
+    x_stop_voltage: float
+    x_steps: int
+    y_channel: int
+    y_start_voltage: float
+    y_stop_voltage: float
+    y_steps: int
+    acquisition_delay: float
+    adaptive_shift: float
 
+    # -------------------------------------------------
+
+    def __post_init__(self):
+        """default values for unspecified values"""
+        if isinstance(self.x_channel, property):
+            self.x_channel = 1
+        if isinstance(self.x_start_voltage, property):
+            self.x_start_voltage = 0.0
+        if isinstance(self.x_stop_voltage, property):
+            self.x_stop_voltage = 1.0
+        if isinstance(self.x_steps, property):
+            self.x_steps = 10
+        if isinstance(self.y_channel, property):
+            self.y_channel = 2
+        if isinstance(self.y_start_voltage, property):
+            self.y_start_voltage = 0.0
+        if isinstance(self.y_stop_voltage, property):
+            self.y_stop_voltage = 1.0
+        if isinstance(self.y_steps, property):
+            self.y_steps = 10
+        if isinstance(self.acquisition_delay, property):
+            self.acquisition_delay = 0.0
+        if isinstance(self.adaptive_shift, property):
+            self.adaptive_shift = 0.0
+
+    # -------------------------------------------------
+
+    def __check_min_max(
+        self, val: int | float, min: int | float, max: int | float, prop: str
+    ) -> None:
+        """check validity of properties"""
+        if isinstance(val, property):
+            # default values are not checked!
+            return
+
+        if not isinstance(val, (int, float)):
+            raise ValueError(f"Configuration value {prop} is of not the correct type.")
+        if val < min:
+            raise ValueError(
+                f"Configuration value {prop} is too small. Increase {prop} to {min}."
+            )
+        if val > max:
+            raise ValueError(
+                f"Configuration value {prop} is too big. Decrease {prop} to {max}."
+            )
+
+    # -------------------------------------------------
+
+    @property
+    def x_channel(self) -> int:
+        return self._x_channel
+
+    @x_channel.setter
+    def x_channel(self, val: int) -> None:
+        self.__check_min_max(val, min=1, max=12, prop="x_channel")
+        self._x_channel = val
+
+    @property
+    def x_start_voltage(self) -> float:
+        return self._x_start_voltage
+
+    @x_start_voltage.setter
+    def x_start_voltage(self, val: float) -> None:
+        self.__check_min_max(val, min=-10.0, max=10.0, prop="x_start_voltage")
+        self._x_start_voltage = val
+
+    @property
+    def x_stop_voltage(self) -> float:
+        return self._x_stop_voltage
+
+    @x_stop_voltage.setter
+    def x_stop_voltage(self, val: float) -> None:
+        self.__check_min_max(val, min=-10.0, max=10.0, prop="x_stop_voltage")
+        self._x_stop_voltage = val
+
+    @property
+    def x_steps(self) -> int:
+        return self._x_steps
+
+    @x_steps.setter
+    def x_steps(self, val: int) -> None:
+        self.__check_min_max(val, min=10, max=16_777_216, prop="x_steps")
+        self._x_steps = val
+
+    @property
+    def y_channel(self) -> int:
+        return self._y_channel
+
+    @y_channel.setter
+    def y_channel(self, val: int) -> None:
+        self.__check_min_max(val, min=1, max=12, prop="y_channel")
+        self._y_channel = val
+
+    @property
+    def y_start_voltage(self) -> float:
+        return self._y_start_voltage
+
+    @y_start_voltage.setter
+    def y_start_voltage(self, val: float) -> None:
+        self.__check_min_max(val, min=-10.0, max=10.0, prop="y_start_voltage")
+        self._y_start_voltage = val
+
+    @property
+    def y_stop_voltage(self) -> float:
+        return self._y_stop_voltage
+
+    @y_stop_voltage.setter
+    def y_stop_voltage(self, val: float) -> None:
+        self.__check_min_max(val, min=-10.0, max=10.0, prop="y_stop_voltage")
+        self._y_stop_voltage = val
+
+    @property
+    def y_steps(self) -> int:
+        return self._y_steps
+
+    @y_steps.setter
+    def y_steps(self, val: int) -> None:
+        self.__check_min_max(val, min=1, max=16_777_216, prop="y_steps")
+        self._y_steps = val
+
+    @property
+    def acquisition_delay(self) -> float:
+        return self._acquisition_delay
+
+    @acquisition_delay.setter
+    def acquisition_delay(self, val: float) -> None:
+        self.__check_min_max(val, min=0.00001, max=4000.0, prop="acquisition_delay")
+        self._acquisition_delay = val
+
+    @property
+    def adaptive_shift(self) -> float:
+        return self._adaptive_shift
+
+    @adaptive_shift.setter
+    def adaptive_shift(self, val: float) -> None:
+        self.__check_min_max(val, min=-10.0, max=10.0, prop="adaptive_shift")
+        self._adaptive_shift = val
+
+
+# class ----------------------------------------------------------------
+
+
+class BaspiLnhrdac2Fast2d(InstrumentModule):
+    def __init__(
+        self, parent: VisaInstrument, name: str, controller: BaselDac2Controller
+    ):
+        """
+        Class which defines an adaptive fast 2D-scan of the LNHR DAC II with all its QCoDeS-parameters.
+
+        2D-scan-Parameters:
+        configuration (object of type BaspiLnhrdac2Fast2dConfig, to configure the fast 2D-scan)
+        trigger_channel (13 ... 24, selecting a channel if the point out mode is used)
+        trigger (disable: no trigger/ scan as fast as possible, line in: external trigger starts every x-axis sweep,
+                line out: trigger is set with every x-axis sweep, point out: trigger is set with every x-axis step)
+        x_axis (voltages in V of x-axis sweep, only gettable)
+        y_axis (voltages in V of y-axis sweep, only gettable)
+        enable (ON/True: start fast 2D-scan, OFF/False: stop fast 2D-scan)
+
+        Parameters:
+        parent: instrument this channel is a part of
+        name: name of the channel
+        controller: the controller the instrument uses for its communication
+        """
+
+        super().__init__(parent, name)
+        self.__controller = controller
+        self.__awg_trig = None
+        self.__awg_xy = None
+        self.__current_config = None
+
+        self.configuration = self.add_parameter(
+            name="configuration", get_cmd=None, set_cmd=self.__set_2d_configuration
+        )
+
+        self.trigger_channel = self.add_parameter(
+            name="trigger_channel",
+            get_cmd=self.__get_2d_trigger_channel,
+            set_cmd=self.__set_2d_trigger_channel,
+            vals=validate.Ints(min_value=13, max_value=24),
+        )
+
+        self.trigger = self.add_parameter(
+            name="trigger", get_cmd=None, set_cmd=self.__set_2d_trigger
+        )
+
+        self.x_axis = self.add_parameter(
+            name="x_axis", unit="V", get_cmd=self.__get_2d_x_axis, set_cmd=None
+        )
+
+        self.y_axis = self.add_parameter(
+            name="y_axis", unit="V", get_cmd=self.__get_2d_y_axis, set_cmd=None
+        )
+
+        self.enable = self.add_parameter(
+            name="enable",
+            get_cmd=None,
+            set_cmd=self.__set_2d_enable,
+            val_mapping=create_on_off_val_mapping(on_val=True, off_val=False),
+            initial_value=False,
+        )
+
+    # -------------------------------------------------
+
+    def __set_2d_configuration(self, config: BaspiLnhrdac2Fast2dConfig) -> None:
+        """
+        Create an adaptive fast 2D-scan.
+
+        config-Attributes:
+        x_channel: channel of the x-axis (1 - 12)
+        x_start_voltage: starting voltage of the x-axis in V (+/- 10.000000 V)
+        x_stop_voltage: ending voltage of the x-axis in V (+/- 10.000000 V)
+        x_steps: number of steps the x-axis voltage is incremented
+        y_channel: channel of the y-axis (1 - 12)
+        y_start_voltage: starting voltage of the x-axis in V (+/- 10.000000 V)
+        y_stop_voltage: ending voltage of the x-axis in V (+/- 10.000000 V)
+        y_steps: number of steps the y-axis voltage is incremented
+        acquisition_delay: time for which each voltage step is outputted in s
+        adaptive_shift: voltage shift in V which is applied to the x-axis, after every y-axis sweep (+/- 10.000000 V)
+
+        Parameters:
+        config: object containing 2D scan configuration
+        """
+
+        print(
+            "Starting to configure fast adaptive 2D scan. AWG A will be repurposed. AWG A and AWG B connot be used while the 2D scan is running."
+        )
+
+        # check if AWG can be used
+        if (
+            not self.__controller.get_awg_run_state("a")
+            and self.__controller.get_ramp_state("a") == 0
+            and not self.__controller.get_awg_run_state("b")
+            and self.__controller.get_ramp_state("b") == 0
+        ):
+            self.__awg_xy = "a"
+        else:
+            raise SystemError(
+                f"During the setup of the fast adaptive 2D scan, AWG A and B must not run."
+            )
+
+        if self.__awg_xy == "a":
+            self.parent.awga.locked = False
+
+        # self.__controller.set_awg_channel(self.__awg_xy, config.y_channel)
+        self.parent.awga.channel.set(config.y_channel)
+        if not self.__controller.get_awg_channel_availability(self.__awg_xy):
+            raise SystemError(
+                f"The chosen y-axis output (channel {config.y_channel}) is not available."
+            )
+
+        self.__controller.set_ramp_channel(self.__awg_xy, config.x_channel)
+        if not self.__controller.get_ramp_channel_availability(self.__awg_xy):
+            raise SystemError(
+                f"The chosen x-axis output (channel {config.y_channel}) is not available."
+            )
+
+        # calculate internal values, check for limits
+        x_ramp_time = 0.005 * (config.x_steps + 1)
+        y_step_size = (config.y_stop_voltage - config.y_start_voltage) / config.y_steps
+        y_period = config.y_steps * config.acquisition_delay
+        if y_period < 0.006:
+            raise SystemError(
+                f"The configured y-axis sweep is too short ({y_period:.3f} s). Minimal sweep time is 0.006 s. Increase number of steps or acquisition delay."
+            )
+
+        # set up x-axis
+        self.__controller.set_ramp_starting_voltage(
+            self.__awg_xy, config.x_start_voltage
+        )
+        self.__controller.set_ramp_peak_voltage(self.__awg_xy, config.x_stop_voltage)
+        self.__controller.set_ramp_duration(self.__awg_xy, x_ramp_time)
+        self.__controller.set_ramp_shape(self.__awg_xy, 0)
+        self.__controller.set_ramp_cycles(self.__awg_xy, 1)
+        self.__controller.select_ramp_step(self.__awg_xy, 1)
+
+        # set up y-axis
+        y_axis_waveform = []
+        for step in range(0, config.y_steps + 1):
+            y_axis_waveform.append(step * y_step_size)
+        y_axis_waveform.append(config.y_start_voltage)
+        y_axis_waveform = array(y_axis_waveform)
+
+        self.parent.awga.trigger.set("disable")
+        self.parent.awga.cycles.set(1)
+        self.parent.awga.sampling_rate.set(config.acquisition_delay)
+        self.parent.awga.length.set(len(y_axis_waveform))
+        self.parent.awga.waveform.set(y_axis_waveform)
+
+        # set up adaptive shift
+        adaptive_scan = 1 if config.adaptive_shift != 0.0 else 0
+        self.__controller.set_awg_start_mode(self.__awg_xy, 1)
+        self.__controller.set_awg_reload_mode(self.__awg_xy, adaptive_scan)
+        self.__controller.set_apply_polynomial(self.__awg_xy, adaptive_scan)
+
+        # lock AWG to prevent User from manipulating/ breaking stuff
+        self.parent.awga.locked = True
+        self.parent.awgb.locked = True
+
+        self.__current_config = config
+
+        print("Fast adaptive 2D scan sucessfully configured. Ready to start.")
+
+    # -------------------------------------------------
+
+    def __get_2d_trigger_channel(self) -> int:
+        """
+        Gets the channel on which the point to point trigger is outputted.
+        Only works for trigger mode "point out", for other modes use outputs on the back of the DAC.
+
+        Returns:
+        int: "point out" trigger output (13 ... 24)
+        """
+
+        if self.__awg_trig == "c":
+            self.parent.awgc.locked = False
+            channel = self.parent.awgc.channel.get()
+            self.parent.awgc.locked = True
+        else:
+            channel = self.parent.awgc.channel.get()
+
+        return channel
+
+    # -------------------------------------------------
+
+    def __set_2d_trigger_channel(self, channel: int) -> None:
+        """
+        Select the channel on which the point to point trigger is outputted.
+        Only works for trigger mode "point out", for other modes use outputs on the back of the DAC.
+
+        Parameters:
+        channel: select "point out" trigger output (13 ... 24)
+        """
+
+        if self.__awg_trig == "c":
+            self.parent.awgc.locked = False
+            self.parent.awgc.channel.set(channel)
+            self.parent.awgc.locked = True
+        else:
+            self.parent.awgc.channel.set(channel)
+
+    # -------------------------------------------------
+
+    def __set_2d_trigger(self, mode: str) -> None:
+        """
+        Set the trigger mode of fast 2D-scan.
+
+        Parameters:
+        mode: "disable": no trigger/ scan as fast as possible, "line in": external trigger starts every x-axis sweep,
+                "line out": trigger is set with every x-axis sweep, "point out": trigger is set with every x-axis step
+
+        """
+
+        print(
+            "Starting to configure fast 2D scan trigger. AWG C might be repurposed. AWG C and AWG D connot be used while the point to point trigger output is running."
+        )
+
+        fast2d_triggers = ("disable", "line in", "line out", "point out")
+
+        if mode not in fast2d_triggers:
+            raise ValueError(
+                f"Value '{mode}' is invalid. Valid values are: {fast2d_triggers}."
+            )
+
+        if self.__current_config == None:
+            raise SystemError(
+                f"No fast 2D scan configuration available. Set configuration parameter first."
+            )
+
+        if (
+            self.__controller.get_awg_run_state("a")
+            or self.__controller.get_ramp_state("a") == 1
+            or self.__controller.get_awg_run_state("b")
+            or self.__controller.get_ramp_state("b") == 1
+        ):
+            raise SystemError(
+                f"During the setup of the fast adaptive 2D scan trigger, all AWGs must not run."
+            )
+
+        self.parent.awga.locked = False
+        self.parent.awgc.locked = False
+        self.parent.awgd.locked = False
+        if mode == "disable":
+            self.__awg_trig = None
+            self.parent.awga.trigger.set("disable")
+            self.__controller.set_awg_start_mode(self.__awg_xy, 1)
+            print(f"Fast 2D scan trigger now set to '{mode}'.")
+            if self.__awg_xy == "a":
+                self.parent.awga.locked = True
+        elif mode == "line in":
+            self.__awg_trig = None
+            self.parent.awga.trigger.set("start only")
+            self.__controller.set_awg_start_mode(self.__awg_xy, 0)
+            print(
+                f"Trigger mode '{mode}' cannot access channel {self.parent.fast2d.trigger_channel.get()}. Use 'Trig In AWG A' instead."
+            )
+            self.parent.awga.locked = True
+        elif mode == "line out":
+            self.__awg_trig = None
+            self.parent.awga.trigger.set("disable")
+            self.__controller.set_awg_start_mode(self.__awg_xy, 1)
+            print(
+                f"Trigger mode '{mode}' cannot access channel {self.parent.fast2d.trigger_channel.get()}. Use 'Sync Out AWG A' instead."
+            )
+            if self.__awg_xy == "a":
+                self.parent.awga.locked = True
+        elif mode == "point out":
+            # choosing AWG for trigger
+            if not self.__controller.get_awg_run_state(
+                "c"
+            ) and not self.__controller.get_awg_run_state("d"):
+                self.__awg_trig = "c"
+            else:
+                raise SystemError(
+                    f"During the setup of the fast 2D scan point by point trigger output, AWG C and D must not run."
+                )
+
+            # trigger signal must have 1/2 of sweeping frequency
+            trig_config = BaspiLnhrdac2SWGConfig(
+                shape="rectangle",
+                frequency=float(1.0 / self.__current_config.acquisition_delay),
+                amplitude=2.5,
+                offset=2.5,
+            )
+
+            self.parent.swg.configuration.set(trig_config)
+            self.parent.swg.apply("C")
+            self.parent.awgc.cycles.set(self.__current_config.y_steps)
+            self.parent.awgc.trigger.set("start only")
+            if self.__awg_xy == "a":
+                self.parent.awga.locked = True
+            self.parent.awgc.locked = True
+            self.parent.awgd.locked = True
+
+            print(
+                f"Trigger mode '{mode}' requires a physical connection inbetween the devices 'Sync Out AWG A' and 'Trig In AWG C' outputs."
+            )
+            print(
+                f"Fast 2D scan trigger now set to '{mode}', using DAC channel {self.parent.fast2d.trigger_channel.get()}."
+            )
+
+    # -------------------------------------------------
+
+    def __get_2d_x_axis(self) -> ndarray:
+        """
+        Get the x-axis voltage steps which are outputted in a x-axis sweep.
+
+        Returns:
+        ndarray: numpy array with voltage steps in V (+/- 10.000000 V)
+        """
+
+        if self.__awg_xy == "a":
+            step_size = self.__controller.get_ramp_step_size(self.__awg_xy)
+            number_steps = self.__controller.get_ramp_cycle_steps(self.__awg_xy)
+            start_voltage = self.__controller.get_ramp_starting_voltage(self.__awg_xy)
+
+            waveform = []
+            for step in range(0, number_steps):
+                waveform.append(round(start_voltage + (step * step_size), 6))
+
+            return array(waveform, dtype=float)
+        else:
+            return array([], dtype=float)
+
+    # -------------------------------------------------
+
+    def __get_2d_y_axis(self) -> ndarray:
+        """
+        Get the y-axis voltage steps which are outputted in a y-axis sweep.
+
+        Returns:
+        ndarray: numpy array with voltage steps in V (+/- 10.000000 V)
+        """
+
+        if self.__awg_xy == "a":
+            self.parent.awga.locked = False
+            waveform = self.parent.awga.waveform.get()
+            self.parent.awga.locked = True
+
+            # delete last element (returns to starting value)
+            waveform = list(waveform)
+            waveform.pop()
+            return array(waveform)
+        else:
+            return array([], dtype=float)
+
+    # -------------------------------------------------
+
+    def __set_2d_enable(self, enable: bool) -> None:
+        """
+        Start or stop the fast 2D-scan by software.
+
+        Parameters:
+        enable: start or stop 2D-scan
+        """
+
+        if enable:
+            if self.__awg_xy == "a":
+                self.parent.awga.locked = False
+                self.parent.awga.enable.set(True)
+                self.parent.awga.locked = True
+                self.parent.awgb.locked = True
+                print(
+                    f"Fast adaptive 2D scan started with configuration {self.__current_config}."
+                )
+        elif self.__awg_xy == "a":
+            self.__awg_xy = None
+            self.__current_config = None
+            self.parent.awga.locked = False
+            self.parent.awgb.locked = False
+            print(
+                f"Fast adaptive 2D scan stopped. All AWGs can be used normally again."
+            )
+
+
+# class ----------------------------------------------------------------
+
+
+class BaselDac2(VisaInstrument):
+    def __init__(self, name: str, address: str):
+        """
+        Main class for integrating the Basel Precision Instruments
+        LNHR DAC II into QCoDeS as an instrument.
+
+        Parameters:
+        name: name of the instrument
+        address: VISA address of the instrument
+        """
+
+        super().__init__(name, address)
+
+        # "library" of all DAC commands
+        # not to be used outside of this class definition
+        # to only have a single interface to the device
+        self.__controller = BaselDac2Controller(self)
+
+        # visa properties for communication
+        self.visa_handle.write_termination = "\r\n"
+        self.visa_handle.read_termination = "\r\n"
+
+        # get number of physicallly available channels
+        # for correct further initialization
+        channel_modes = self.__controller.get_all_mode()
+        self.number_channels = len(channel_modes)
+        if self.number_channels != 12 and self.number_channels != 24:
+            raise SystemError(
+                "Physically available number of channels is not 12 or 24. Please check device."
+            )
+
+        # create channels and add to instrument
+        # save references for later grouping
+        channels = {}
+        for channel_number in range(1, self.number_channels + 1):
+            name = f"ch{channel_number}"
+            channel = BaspiLnhrdac2Channel(
+                self, name, channel_number, self.__controller
+            )
+            channels.update({name: channel})
+            self.add_submodule(name, channel)
+
+        # grouping channels to simplify simoultaneous access
+        all_channels = ChannelList(self, "all channels", BaspiLnhrdac2Channel)
+        for channel_number in range(1, self.number_channels + 1):
+            channel = channels[f"ch{channel_number}"]
+            all_channels.append(channel)
+
+        self.add_submodule("all", all_channels)
+
+        if self.number_channels == 24:
+            lower_board = ChannelList(self, "lower board", BaspiLnhrdac2Channel)
+            for channel_number in range(1, 12 + 1):
+                channel = channels[f"ch{channel_number}"]
+                lower_board.append(channel)
+
+            self.add_submodule("lower_board", lower_board)
+
+            higher_board = ChannelList(self, "higher board", BaspiLnhrdac2Channel)
+            for channel_number in range(13, 24 + 1):
+                channel = channels[f"ch{channel_number}"]
+                higher_board.append(channel)
+
+            self.add_submodule("higher board", higher_board)
+
+        # AWGs dependent on 12/24 channel version
+        if self.number_channels == 12:
+            awgs = ("a", "b")
+        elif self.number_channels == 24:
+            awgs = ("a", "b", "c", "d")
+
+        for awg_designator in awgs:
+            name = f"awg{awg_designator}"
+            awg = BaspiLnhrdac2AWG(self, name, awg_designator, self.__controller)
+            self.add_submodule(name, awg)
+
+        # only one SWG module available
+        name = "swg"
+        swg = BaspiLnhrdac2SWG(self, name, self.__controller)
+        self.add_submodule(name, swg)
+
+        #  only one 2D scan module available
+        name = "fast2d"
+        fast2d = BaspiLnhrdac2Fast2d(self, name, self.__controller)
+        self.add_submodule(name, fast2d)
+
+        # display some information after instanciation/ initial connection
+        print("")
+        self.connect_message()
+        print(
+            "All channels have been turned off (1 MOhm Pull-Down to AGND) upon initialization "
+            + "and are pre-set to 0.0 V if turned on without setting a voltage beforehand."
+        )
+        print("")
+
+    # -------------------------------------------------
+
+    def get_idn(self) -> dict:
+        """
+        Get the identification information of the device.
+
+        Returns:
+        dict: contains all QCodes required IDN fields
+        """
+        vendor = "Basel Precision Instruments GmbH (BASPI)"
+        model = f"LNHR DAC II (SP1060) - {self.number_channels} channel version"
+
+        hardware_info = self.__controller.get_serial()
+        serial = hardware_info[37:51]
+        software_info = self.__controller.get_firmware()
+        firmware = software_info[18:33]
+
+        idn = {"vendor": vendor, "model": model, "serial": serial, "firmware": firmware}
+
+        return idn
+
+    def ask_basel_controller(self, cmd: str):
+        """
+        This method sends a command directly to the Basel DAC II  and receives multiple answer lines.
+        It is to slow for measurement acquisitions, since it relies on a timeout to determine the end of the answer.
+
+        Parameters:
+        command: command as per programmers manual of the device
+
+        Returns:
+        string: answer of the device for a query
+        """
+
+        answer = self.__controller.ask_multi_line(cmd)
+
+        return answer
+
+    def activate_dac_channels(
+        self,
+        channel_number_list: list[int] = linspace(1, 24, 24, dtype=int),
+        high_bw=False,
+    ):
+        """Activate all DAC channels in the list with specified bandwidth setting and sets them to zero voltage.
+
+        Args:
+            dac_chan_numbers (list[int]): List of DAC channel numbers to activate.
+            high_bandwidth (bool): Whether to set channels to high bandwidth mode.
+        """
+
+        all_channels = self.all
+
+        for chan_number in channel_number_list:
+            chan = all_channels[chan_number - 1]  # ChannelList is zero-indexed
+
+            chan.high_bandwidth.set(high_bw)
+            sleep(0.1)
+
+            if chan.enable.get():
+                continue
+            else:
+                sleep(0.1)
+                chan.enable.set(True)
+                sleep(0.1)
+                chan.voltage.set(0.0)
+
+    get_help_commands = lambda self: self.__controller.get_help_commands()
+    get_help_control = lambda self: self.__controller.get_help_control()
+    get_firmware = lambda self: self.__controller.get_firmware()
+    get_serial = lambda self: self.__controller.get_serial()
+    get_health = lambda self: self.__controller.get_health()
+    get_ip = lambda self: self.__controller.get_ip()
+
+
+# main -----------------------------------------------------------------
 
 if __name__ == "__main__":
-    dac = SP1060("LNHR_dac3", "TCPIP0::192.168.0.5::23::SOCKET")
-    dac.ch1.volt.set(8)
-    dac.ch12.volt.set(0)
-    print(dac.ch12.volt.get())
-    status_all = dac.query_all()
-    print("Query_all:")
-    print(status_all)
+    # a little example on how to use this driver
 
-    # important tests
-    print("Polynomial Tests")
-    dac.set_polynomial("A", [4.938, -4.3003, 0, 20.5233])
-    print(dac.query_coefs_Polymem("A"))
-    dac.write_AWGClkPeriod("AB", 1230)
-    print("clk period: {}".format(dac.read_AWGClkPeriod("AB")))
-
-    # scan tests
-    time.sleep(1)
-    dac.set_chan_off(10)
-    dac.set_chan_voltage(10, 0)
-    dac.set_chan_on(10)
-    dac.set_chan_bandwidth(10, "HBW")
-    data_points = dac.scan2D(
-        dac.ch10.volt,
-        -3,
-        -2,
-        10,
-        0.01,
-        dac.ch11.volt,
-        0,
-        1,
-        5,
-        0.1,
-        [dac.ch10.volt, dac.ch11.volt],
-    )
-    print(data_points)
-
-    # setup experiment, databases
-    db_name = "Untitled1.db"  # Database name
-    sample_name = "no_samp"  # Sample name
-    exp_name = "test experiment"  # Experiment name
-
-    db_file_path = os.path.join(os.getcwd(), db_name)
-    qc.config.core.db_location = db_file_path
-    qc.initialise_or_create_database_at(db_file_path)
-
-    experiment = qc.load_or_create_experiment(
-        experiment_name=exp_name, sample_name=sample_name
-    )
-
-    # create gate parameters for scans.
-    V12 = ph.GateParameter(
-        dac.ch10.volt, name="V1", unit="V", value_range=(-10, 10), scaling=1
-    )
-
-    V2 = ph.GateParameter(
-        dac.ch2.volt, name="V2", unit="V", value_range=(-10, 10), scaling=1
-    )
-
-    # create station
-    station = qc.Station()
+    station = Station()
+    dac = BaselDac2("dac", "TCPIP0::192.168.0.108::23::SOCKET")
     station.add_component(dac)
-
-    # run a scan
-    # do1d(V12, 0, -2.5, 15, 0.051)
-
-    """
-    time.sleep(2)
-    print("Setting sinewave")
-    dac.set_newWaveform('12','0','50.0','5.0','0') # sinewave
-    time.sleep(2)
-    print("Setting Triangle")
-    dac.set_newWaveform('12','1','50.0','5.0','0') # triangle
-    time.sleep(2)
-    print("Setting Sawtooth")
-    dac.set_newWaveform('12','2','50.0','5.0','0') # sawtooth
-    """
-    # test
-    dac.set_bandwidth(10, "HBW")
-    bw = dac.get_bandwidth(1)
-    print("Bandwidth: " + bw)
-    time.sleep(1)
-    mode = dac.read_mode(12)
-    print("Mode: " + mode)
-    time.sleep(1)
-    dac.close()

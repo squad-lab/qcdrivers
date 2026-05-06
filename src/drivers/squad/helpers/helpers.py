@@ -33,7 +33,14 @@ class Lockin(Instrument):
     """
 
     def __init__(
-        self, name, address, device="MFLI", serial=None, *args, **kwargs
+        self,
+        name,
+        address,
+        device="MFLI",
+        serial=None,
+        demod_channels: list = [0],
+        *args,
+        **kwargs,
     ) -> None:
         super().__init__(f"wrapper_{name}", **kwargs)
         if serial:
@@ -57,6 +64,10 @@ class Lockin(Instrument):
                 self.amplitude = self.core.sigouts[0].amplitudes[1].value
                 self.on = self.sigouts[0].on
 
+                self.select_input = (
+                    self.core.demods[0].adcselect
+                )  # call 0 for voltage (Sig In 1) and 1 for current (Curr In 1)
+
                 self.add = self.core.sigouts[0].add
                 self.diff = self.core.sigouts[0].diff
 
@@ -67,9 +78,18 @@ class Lockin(Instrument):
                 self.tc = self.core.demods[0].timeconstant
                 self.order = self.core.demods[0].order
 
+                self.enable_amplitude = self.core.sigouts[0].enables[1].value
+
                 self.autosigout = self.core.sigouts[0].autorange
+                self.sigout_range = self.core.sigouts[
+                    0
+                ].range  # available: 10mV, 100mV, 1V, 10V
+
                 self.autovoltin = self.core.sigins[0].autorange
-                self.autocurrin = self.core.sigins[0].autorange
+                self.voltin_range = self.core.sigins[0].range
+
+                self.autocurrin = self.core.currins[0].autorange
+                self.currin_range = self.core.currins[0].range
 
                 self.snapshot = self.core.snapshot
                 self.core.add_parameter(
@@ -116,22 +136,76 @@ class Lockin(Instrument):
                     **kwargs,
                 )
 
+                self.snapshot = self.core.snapshot
+
+                self.on1 = self.sigouts[0].on
+                self.on2 = self.sigouts[1].on
+
+                self.autosigout1 = self.core.sigouts[0].autorange
+                self.autosigout2 = self.core.sigouts[1].autorange
+
+                self.offset_out1 = self.core.sigouts[0].offset
+                self.offset_out2 = self.core.sigouts[1].offset
+
+                # Disable all demodulators first, then only enable the ones specified in demod_channels
                 for demod in range(len(self.core.demods)):
+                    self.core.demods[demod].enable(False)
+
+                for demod in demod_channels:
+                    # Add parameters for frequency, R, and P for each for each of the eight demodulators/osscilators that are input
+
+                    self.core.demods[demod].enable(True)
+
                     self.core.add_parameter(
-                        f"R{demod}",
-                        label=f"{name} R{demod}",
+                        f"frequency{demod + 1}",
+                        label=f"{name} Frequency{demod + 1}",
+                        get_parser=float,
+                        get_cmd=lambda d=demod: self.core.oscs[d].freq(),
+                        set_cmd=lambda val, d=demod: self.core.oscs[d].freq(val),
+                        unit="Hz",
+                    )
+
+                    self.core.add_parameter(
+                        f"R{demod + 1}",
+                        label=f"{name} R{demod + 1}",
                         get_parser=float,
                         get_cmd=lambda d=demod: self.r_val(d),
                         unit=f"{self.get_r_unit(demod)}",
                     )
 
                     self.core.add_parameter(
-                        f"P{demod}",
-                        label=f"{name} P{demod}",
+                        f"P{demod + 1}",
+                        label=f"{name} P{demod + 1}",
                         get_parser=float,
                         get_cmd=lambda d=demod: self.p_val(d),
                         unit="deg",
                     )
+
+                    for out in range(2):
+                        self.core.add_parameter(
+                            f"out{out + 1}_amplitude{demod + 1}",
+                            label=f"{name} out{out + 1} amplitude {demod + 1}",
+                            get_parser=float,
+                            get_cmd=lambda o=out, d=demod: (
+                                self.core.sigouts[o].amplitudes[d].value()
+                            ),
+                            set_cmd=lambda val, o=out, d=demod: (
+                                self.core.sigouts[o].amplitudes[d].value(val)
+                            ),
+                            unit="V",
+                        )
+
+                        self.core.add_parameter(
+                            f"out{out + 1}_amplitude{demod + 1}_enable",
+                            label=f"{name} out{out + 1} amplitude {demod + 1} enable",
+                            get_parser=bool,
+                            get_cmd=lambda o=out, d=demod: (
+                                self.core.sigouts[o].enables[d].value()
+                            ),
+                            set_cmd=lambda val, o=out, d=demod: (
+                                self.core.sigouts[o].enables[d].value(val)
+                            ),
+                        )
 
                     _adc_param = self.core.demods[demod].adcselect
                     _original_set_raw = _adc_param.set_raw
@@ -139,9 +213,9 @@ class Lockin(Instrument):
                     def _new_set_raw(this, val):
                         _original_set_raw(val)
                         if val == 0:
-                            getattr(self.core, f"R{demod}").unit = "V"
+                            getattr(self.core, f"R{demod + 1}").unit = "V"
                         elif val == 1:
-                            getattr(self.core, f"R{demod}").unit = "A"
+                            getattr(self.core, f"R{demod + 1}").unit = "A"
 
                     _adc_param.set_raw = types.MethodType(_new_set_raw, _adc_param)
 
@@ -151,6 +225,9 @@ class Lockin(Instrument):
 
             device = "SR830"
             self.core = SR830(f"{name}_core", address, *args, **kwargs)
+
+            self.snapshot = self.core.snapshot
+
             self.sinc = self.core.sync_filter
             self.tc = self.core.time_constant
             self.order = self.filter_slope
@@ -179,8 +256,8 @@ class Lockin(Instrument):
     def p_val(self, demods=0) -> float:
         return np.rad2deg(
             np.arctan2(
-                self.core.demods[0].sample()["y"][0],
-                self.core.demods[0].sample()["x"][0],
+                self.core.demods[demods].sample()["y"][0],
+                self.core.demods[demods].sample()["x"][0],
             )
         )
 

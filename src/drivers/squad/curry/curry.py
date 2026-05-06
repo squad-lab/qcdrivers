@@ -214,8 +214,6 @@ class CurrentSource(Instrument):
         )
 
     def set_current(self, i: float) -> None:
-        print(f"Setting current to {i} A")
-        print(i / self.vccs_ampl())
         self.curr_setter(i / self.vccs_ampl())
 
     def get_current(self) -> float:

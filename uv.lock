@@ -273,9 +273,11 @@ name = "drivers"
 version = "2.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "ipykernel" },
     { name = "matplotlib" },
     { name = "numpy" },
     { name = "pyvisa" },
+    { name = "pyvisa-py" },
     { name = "qcodes" },
     { name = "scipy" },
     { name = "zhinst" },
@@ -289,9 +291,11 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "ipykernel", specifier = ">=7.1.0" },
     { name = "matplotlib", specifier = ">=3.10.1" },
     { name = "numpy", specifier = ">=2.2.4" },
     { name = "pyvisa", specifier = ">=1.14.1" },
+    { name = "pyvisa-py", specifier = ">=0.8.1" },
     { name = "qcodes", specifier = ">=0.45" },
     { name = "scipy", specifier = ">=1.15.2" },
     { name = "zhinst", specifier = ">=25.1.0" },
@@ -405,7 +409,7 @@ wheels = [
 
 [[package]]
 name = "ipykernel"
-version = "6.29.5"
+version = "7.1.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "appnope", marker = "sys_platform == 'darwin'" },
@@ -422,9 +426,9 @@ dependencies = [
     { name = "tornado" },
     { name = "traitlets" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/e9/5c/67594cb0c7055dc50814b21731c22a601101ea3b1b50a9a1b090e11f5d0f/ipykernel-6.29.5.tar.gz", hash = "sha256:f093a22c4a40f8828f8e330a9c297cb93dcab13bd9678ded6de8e5cf81c56215", size = 163367, upload-time = "2024-07-01T14:07:22.543Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/b9/a4/4948be6eb88628505b83a1f2f40d90254cab66abf2043b3c40fa07dfce0f/ipykernel-7.1.0.tar.gz", hash = "sha256:58a3fc88533d5930c3546dc7eac66c6d288acde4f801e2001e65edc5dc9cf0db", size = 174579, upload-time = "2025-10-27T09:46:39.471Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/94/5c/368ae6c01c7628438358e6d337c19b05425727fbb221d2a3c4303c372f42/ipykernel-6.29.5-py3-none-any.whl", hash = "sha256:afdb66ba5aa354b09b91379bac28ae4afebbb30e8b39510c9690afb7a10421b5", size = 117173, upload-time = "2024-07-01T14:07:19.603Z" },
+    { url = "https://files.pythonhosted.org/packages/a3/17/20c2552266728ceba271967b87919664ecc0e33efca29c3efc6baf88c5f9/ipykernel-7.1.0-py3-none-any.whl", hash = "sha256:763b5ec6c5b7776f6a8d7ce09b267693b4e5ce75cb50ae696aaefb3c85e1ea4c", size = 117968, upload-time = "2025-10-27T09:46:37.805Z" },
 ]
 
 [[package]]
@@ -701,6 +705,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/83/f8/51569ac65d696c8ecbee95938f89d4abf00f47d58d48f6fbabfe8f0baefe/nest_asyncio-1.6.0.tar.gz", hash = "sha256:6f172d5449aca15afd6c646851f4e31e02c598d553a667e38cafa997cfec55fe", size = 7418, upload-time = "2024-01-21T14:25:19.227Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/a0/c4/c2971a3ba4c6103a3d10c4b0f24f461ddc027f0f09763220cf35ca1401b3/nest_asyncio-1.6.0-py3-none-any.whl", hash = "sha256:87af6efd6b5e897c81050477ef65c62e2b2f35d51703cae01aff2905b1852e1c", size = 5195, upload-time = "2024-01-21T14:25:17.223Z" },
+]
+
+[[package]]
+name = "networkx"
+version = "3.6.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/6a/51/63fe664f3908c97be9d2e4f1158eb633317598cfa6e1fc14af5383f17512/networkx-3.6.1.tar.gz", hash = "sha256:26b7c357accc0c8cde558ad486283728b65b6a95d85ee1cd66bafab4c8168509", size = 2517025, upload-time = "2025-12-08T17:02:39.908Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/9e/c9/b2622292ea83fbb4ec318f5b9ab867d0a28ab43c5717bb85b0a5f6b3b0a4/networkx-3.6.1-py3-none-any.whl", hash = "sha256:d47fbf302e7d9cbbb9e2555a0d267983d2aa476bac30e90dfbe5669bd57f3762", size = 2068504, upload-time = "2025-12-08T17:02:38.159Z" },
 ]
 
 [[package]]
@@ -1045,14 +1058,27 @@ wheels = [
 
 [[package]]
 name = "pyvisa"
-version = "1.14.1"
+version = "1.15.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/1a/77/577366efd9cff08ddfedcf14f678ff57bb1a6287ccdf157972e6d9e7b494/PyVISA-1.14.1.tar.gz", hash = "sha256:71030041ed4c5dad77687454cf44b8be4d1642e9d1aaa22019248d41d8ed7a79", size = 234683, upload-time = "2023-11-22T07:33:45.658Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/52/04/1833acfa4ddefc5cdcfd76607f1bf494e7b7b658d890626e23026655d599/pyvisa-1.15.0.tar.gz", hash = "sha256:cec3cb91703a2849f6faa42b1ecd7689a0175baabff8ca33fce9f45934ce45e6", size = 236289, upload-time = "2025-04-01T15:52:25.377Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/99/a0/0e739df84e0fc61abecc6b4b70ad7aea7f5d7ee37ec504baa365c0fec9da/PyVISA-1.14.1-py3-none-any.whl", hash = "sha256:6e4dfc9b6029b4f00d0d4960348c4889c2747aa7f83276950d48a349eab36a45", size = 176651, upload-time = "2023-11-22T07:33:43.496Z" },
+    { url = "https://files.pythonhosted.org/packages/a1/12/4979772f36acceb57664bde282fc7bd3e67f8d0ce85f2a521a05e90baaa5/pyvisa-1.15.0-py3-none-any.whl", hash = "sha256:e3ac8d9e863fbdbbe7e6d4d91401bceb7914d1c4a558a89b2cc755789f1e8309", size = 179199, upload-time = "2025-04-01T15:52:23.631Z" },
+]
+
+[[package]]
+name = "pyvisa-py"
+version = "0.8.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pyvisa" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/55/8d/0f1af2b39feca8868d0692a2c5d0c47f4ad559a051fb678c441fe1e99536/pyvisa_py-0.8.1.tar.gz", hash = "sha256:db53d3219d971d16b8f7c764a93e08475875063635b9ad8ea3c988439833ccdd", size = 102061, upload-time = "2025-09-04T20:48:21.639Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/70/0b/06ccf917ce30d78d75e452d0afc89236b1d384b776c5c33d75c8cc55fbe7/pyvisa_py-0.8.1-py3-none-any.whl", hash = "sha256:31208a2933c1793b4e829ba5f07d265b83f280668df440ee7ee6ac505dea4ee9", size = 82206, upload-time = "2025-09-04T20:48:20.13Z" },
 ]
 
 [[package]]
@@ -1165,7 +1191,7 @@ wheels = [
 
 [[package]]
 name = "qcodes"
-version = "0.45.0"
+version = "0.54.4"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "broadbean" },
@@ -1174,10 +1200,10 @@ dependencies = [
     { name = "h5netcdf" },
     { name = "h5py" },
     { name = "ipykernel" },
-    { name = "ipython" },
     { name = "ipywidgets" },
     { name = "jsonschema" },
     { name = "matplotlib" },
+    { name = "networkx" },
     { name = "numpy" },
     { name = "opentelemetry-api" },
     { name = "packaging" },
@@ -1187,18 +1213,16 @@ dependencies = [
     { name = "pyvisa" },
     { name = "ruamel-yaml" },
     { name = "tabulate" },
-    { name = "tornado" },
     { name = "tqdm" },
     { name = "typing-extensions" },
     { name = "uncertainties" },
     { name = "versioningit" },
     { name = "websockets" },
-    { name = "wrapt" },
     { name = "xarray" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/da/d1/7c497d0e1ac809ce5c93ec4c75e38b4ccc35adf5ece3098ef59be0b0f58e/qcodes-0.45.0.tar.gz", hash = "sha256:a7b216084a99abbf515345218ce5156ddec03fac908d9046bf2aa14f11294cca", size = 794601, upload-time = "2024-05-06T07:19:16.072Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/34/3b/38c613958911c7ea14d852632042e834749558416eea6b93761802bdf6da/qcodes-0.54.4.tar.gz", hash = "sha256:949cf3907fda1af176f545ee7aa3853119204a4c34beafef3fd569aa46521d9a", size = 817999, upload-time = "2025-12-12T17:39:33.878Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/ef/67/5f77912bbaa5c9c12a8883c302ec1d987f09d37aa386f99b591c28168d8d/qcodes-0.45.0-py3-none-any.whl", hash = "sha256:00ef833a20363fc25b9d5984462899edfe256261396cfd076b7a18c6ab88d8f0", size = 948430, upload-time = "2024-05-06T07:19:12.763Z" },
+    { url = "https://files.pythonhosted.org/packages/dd/ee/a08a9240e25b132f1becc86609ccf98f1261a06370aec3ef6458519962e7/qcodes-0.54.4-py3-none-any.whl", hash = "sha256:29df1dfe9b84ae38c03342eb035e7c0523ff3824a51ff45c858cbb04212a7162", size = 977283, upload-time = "2025-12-12T17:39:31.669Z" },
 ]
 
 [[package]]
