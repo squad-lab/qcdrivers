@@ -217,7 +217,7 @@ class CurrentSource(Instrument):
         self.curr_setter(i / self.vccs_ampl())
 
     def get_current(self) -> float:
-        return self.curr_setter() / self.vccs_ampl() - self.curr_offset
+        return self.curr_setter() * self.vccs_ampl() - self.curr_offset
 
 
 class CurrentMeasure(Instrument):
