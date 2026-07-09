@@ -78,6 +78,7 @@ class Lockin(Instrument):
                 self.tc = self.core.demods[0].timeconstant
                 self.order = self.core.demods[0].order
 
+                self.dc_offset = self.core.sigouts[0].offset
                 self.enable_amplitude = self.core.sigouts[0].enables[1].value
 
                 self.autosigout = self.core.sigouts[0].autorange
@@ -178,6 +179,18 @@ class Lockin(Instrument):
                         label=f"{name} P{demod + 1}",
                         get_parser=float,
                         get_cmd=lambda d=demod: self.p_val(d),
+                        unit="deg",
+                    )
+
+                    # phaseshift
+                    self.core.add_parameter(
+                        f"phase{demod + 1}",
+                        label=f"{name} Phase{demod + 1}",
+                        get_parser=float,
+                        get_cmd=self.core.demods[demod].phaseshift,
+                        set_cmd=lambda val, d=demod: self.core.demods[d].phaseshift(
+                            val
+                        ),
                         unit="deg",
                     )
 
