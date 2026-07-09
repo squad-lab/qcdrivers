@@ -1,4 +1,4 @@
-# main body is copied from qdevil.qdac2.qdac2 import QDAC2
+# main body is copied from qcodes contrib drivers, so far we use " from qcodes_contrib_drivers.drivers.QDevil.QDAC2 import QDac2 " now you can use " from drivers.qdevil.qdac2.qdac2 import QDac2 "
 # see original code: https://qcodes.github.io/Qcodes_contrib_drivers/_modules/qcodes_contrib_drivers/drivers/QDevil/QDAC2.html
 
 import numpy as np
