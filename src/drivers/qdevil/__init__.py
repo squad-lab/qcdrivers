@@ -1,1 +1,1 @@
-from drivers.qdevil.qdac2 import QDAC2
+from drivers.qdevil.qdac2.qdac2 import QDac2
