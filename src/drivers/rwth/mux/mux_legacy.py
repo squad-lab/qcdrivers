@@ -86,7 +86,7 @@ class Muxi(VisaInstrument):  # short for Muximillian
                 set_cmd=partial(
                     self.connect_multiple_pins_to_channel_bit, OUT
                 ),  # (dis)-connect PIN(s) to output channel, pass 96 element binary list
-                snapshot_get=False
+                snapshot_get=False,
             )
 
         # 96 parameters for each input channel
@@ -98,7 +98,7 @@ class Muxi(VisaInstrument):  # short for Muximillian
                 set_cmd=partial(
                     self.connect_multiple_channels_to_pin, PIN
                 ),  # (dis)-connect output channels to input channel, pass 4 element binary list
-                snapshot_get=False
+                snapshot_get=False,
             )
 
         # DAC and ADC
@@ -252,7 +252,6 @@ class Muxi(VisaInstrument):  # short for Muximillian
         if reply != "OK":
             raise RuntimeError(f"Unexpected SBIT reply: {reply!r}")
 
-
     def connect_multiple_channels_to_pin(self, PIN, output_switch_list):
         # output switch list should be a 4 entry list
         # eg. [1,0,0,1] (0 = switch open, 1 = switch closed)
@@ -265,7 +264,6 @@ class Muxi(VisaInstrument):  # short for Muximillian
             self.write(f"MUX:SETFULL:INPUT {PIN}," + output_switch_string)
         else:
             print("Invalid output switch list!")
-
 
     def clear_output_channel(self, OUT):
         """disconnect everything from given channel 1,2,3,4"""
@@ -317,9 +315,7 @@ class Muxi(VisaInstrument):  # short for Muximillian
             self.visa_handle.timeout = old_timeout
 
 
-
 class MuxiPatternController(Instrument):
-
     def __init__(self, name, mux, patterns, superpatterns=None, **kwargs):
         super().__init__(name, **kwargs)
         self.mux = mux
