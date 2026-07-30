@@ -139,6 +139,10 @@ class Lockin(Instrument):
 
                 self.snapshot = self.core.snapshot
 
+                # set input trigger impedance to 1 kOhm !
+                for i in [0, 1, 2, 3]:
+                    self.core.triggers.in_[i].imp50(0)
+
                 self.on1 = self.sigouts[0].on
                 self.on2 = self.sigouts[1].on
 
@@ -181,6 +185,14 @@ class Lockin(Instrument):
                         get_cmd=lambda d=demod: self.p_val(d),
                         unit="deg",
                     )
+
+                    # add zi-nodes
+                    getattr(
+                        self.core, f"R{demod + 1}"
+                    ).zi_node = f"/DEMODS/{demod}/SAMPLE.R"
+                    getattr(
+                        self.core, f"P{demod + 1}"
+                    ).zi_node = f"/DEMODS/{demod}/SAMPLE.THETA"
 
                     # phaseshift
                     self.core.add_parameter(
