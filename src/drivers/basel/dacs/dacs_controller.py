@@ -108,7 +108,9 @@ class BaselDac2Controller:
         # synchronisation of all the devices variables
         if command[0].lower() == "c":
             sleep(self.__ctrl_cmd_delay)
-            if "write" or "apply" in command:
+
+            command_lower = command.lower()
+            if "write" in command_lower or "apply" in command_lower:
                 sleep(self.__mem_write_delay)
 
         return answer

@@ -29,6 +29,8 @@ from functools import partial
 from dataclasses import dataclass
 from time import sleep
 
+import numpy as np
+
 # logging --------------------------------------------------------------
 
 import logging
@@ -90,6 +92,8 @@ class BaspiLnhrdac2Channel(InstrumentChannel):
         """
 
         super().__init__(parent, name)
+
+        self._channum = channel
 
         self.voltage = self.add_parameter(
             name="voltage",
@@ -157,17 +161,23 @@ class BaspiLnhrdac2AWG(InstrumentModule):
 
         self.locked = False
 
+        self.cached_awg_config = None
+
         if awg.lower() == "a" or awg.lower() == "b":
             board = "ab"
+            channel_validator = validate.Ints(1, 12)
         elif awg.lower() == "c" or awg.lower() == "d":
             board = "cd"
+            channel_validator = validate.Ints(13, 24)
+        else:
+            raise ValueError(f"Invalid AWG: {awg!r}")
 
         self.channel = self.add_parameter(
             name="channel",
             get_cmd=partial(controller.get_awg_channel, awg),
             set_cmd=partial(controller.set_awg_channel, awg),
             vals=validate.MultiTypeAnd(
-                validate.Ints(min_value=1, max_value=24),
+                channel_validator,
                 BaspiLnhrdac2LockingValidator(self),
             ),
         )
@@ -183,6 +193,7 @@ class BaspiLnhrdac2AWG(InstrumentModule):
             initial_value=0,
         )
 
+        # attention in seconds, not in Hertz!
         self.sampling_rate = self.add_parameter(
             name="sampling_rate",
             unit="s",
@@ -375,7 +386,70 @@ class BaspiLnhrdac2AWG(InstrumentModule):
         if self.__controller.get_awg_clock_period(dac_board[awg]) != clock_period:
             self.__controller.set_awg_clock_period(dac_board[awg], clock_period)
 
+    def write_awg_config(self, awg_config: dict) -> None:
+        """
+        Writes the given awg config into the device memory.
+
+        """
+
+        # check if new awg config is the same as the cached one, if yes, do nothing
+        if self.cached_awg_config is not None and self.awg_configs_equal(
+            awg_config, self.cached_awg_config
+        ):
+            return
+
+        self.channel.set(awg_config["channel"])
+        self.cycles.set(awg_config["cycles"])
+        self.sampling_rate.set(awg_config["sampling_rate"])
+        self.length.set(len(awg_config["waveform"]))
+        self.waveform.set(awg_config["waveform"])
+
+        # cache the new awg config
+        self.cache_awg_config(awg_config)
+
+    def cache_awg_config(self, awg_config: dict) -> None:
+        """
+        Caches the current awg config of the shape:
+        """
+        self.cached_awg_config = awg_config
+
     # -------------------------------------------------
+
+    @staticmethod
+    def create_awg_config(channel, cycles, sampling_rate, waveform) -> dict:
+        """
+        Creates a dictionary containing the current awg config of the shape:
+
+        awg_config = {
+            "channel": 1,
+            "cycles": 0,
+            "sampling_rate": 0.00001,
+            "waveform": [0.0, 0.1, 0.2, ..., 9.9],
+        }
+
+        """
+
+        awg_config = {
+            "channel": channel,
+            "cycles": cycles,
+            "sampling_rate": sampling_rate,
+            "waveform": waveform,
+        }
+
+        return awg_config
+
+    @staticmethod
+    def awg_configs_equal(a: dict, b: dict) -> bool:
+
+        if a is None or b is None:
+            return False
+        else:
+            return (
+                a["channel"] == b["channel"]
+                and a["cycles"] == b["cycles"]
+                and a["sampling_rate"] == b["sampling_rate"]
+                and np.array_equal(a["waveform"], b["waveform"])
+            )
 
     @staticmethod
     def __get_parser_awg_enable(val: bool) -> str:
@@ -1329,7 +1403,6 @@ class BaselDac2(VisaInstrument):
     def activate_dac_channels(
         self,
         channel_number_list: list[int] = linspace(1, 24, 24, dtype=int),
-        high_bw=False,
     ):
         """Activate all DAC channels in the list with specified bandwidth setting and sets them to zero voltage.
 
@@ -1342,8 +1415,6 @@ class BaselDac2(VisaInstrument):
 
         for chan_number in channel_number_list:
             chan = all_channels[chan_number - 1]  # ChannelList is zero-indexed
-
-            chan.high_bandwidth.set(high_bw)
             sleep(0.1)
 
             if chan.enable.get():
@@ -1353,6 +1424,52 @@ class BaselDac2(VisaInstrument):
                 chan.enable.set(True)
                 sleep(0.1)
                 chan.voltage.set(0.0)
+
+    def set_bandwidth_safely(
+        self,
+        channel_number_list: list,
+        high_bw: bool,
+        off_delay: float = 0.1,
+        settle_delay: float = 0.5,
+    ) -> None:
+        channel_number_list = np.atleast_1d(channel_number_list)
+
+        all_channels = self.all
+
+        for chan_number in channel_number_list:
+            chan = all_channels[chan_number - 1]
+
+            if chan.enable.get():
+                chan.enable.set(False)
+                sleep(off_delay)
+
+                chan.high_bandwidth.set(high_bw)
+                sleep(settle_delay)
+
+                chan.enable.set(True)
+            else:
+                chan.high_bandwidth.set(high_bw)
+                sleep(settle_delay)
+
+    def run_awg_sweep(self, awg_list: list[BaspiLnhrdac2AWG]):
+        """
+        Run the sweep for a list of AWGs.
+
+        Parameters:
+        awg_list: list of AWG objects to run the sweep on
+        """
+
+        # turn on first awg
+        awg_list[0].enable.set(True)
+
+        # check if awg is running and wait until finished
+        while any(awg.enable.get() for awg in awg_list):
+            sleep(0.05)
+
+        # set voltage to last value of waveform
+        for awg in awg_list:
+            ch = self.all[awg.channel.get() - 1]
+            ch.voltage.set(awg.waveform.get()[-1])
 
     get_help_commands = lambda self: self.__controller.get_help_commands()
     get_help_control = lambda self: self.__controller.get_help_control()
