@@ -71,6 +71,9 @@ class Lockin(Instrument):
                 self.add = self.core.sigouts[0].add
                 self.diff = self.core.sigouts[0].diff
 
+                # sample rate
+                self.sample_rate = self.core.demods[0].rate
+
                 self.sinc = self.core.demods[0].sinc
                 self.harmonic = self.core.demods[0].harmonic
 
@@ -170,6 +173,22 @@ class Lockin(Instrument):
                         unit="Hz",
                     )
 
+                    # zi-nodes for frequencies
+                    getattr(
+                        self.core,
+                        f"frequency{demod + 1}",
+                    ).zi_node = f"/OSCS/{demod}/FREQ"
+
+                    # sample rate
+                    self.core.add_parameter(
+                        f"sample_rate{demod + 1}",
+                        label=f"{name} Sample Rate {demod + 1}",
+                        get_parser=float,
+                        get_cmd=lambda d=demod: self.core.demods[d].rate(),
+                        set_cmd=lambda val, d=demod: self.core.demods[d].rate(val),
+                        unit="Sa/s",
+                    )
+
                     self.core.add_parameter(
                         f"R{demod + 1}",
                         label=f"{name} R{demod + 1}",
@@ -219,6 +238,12 @@ class Lockin(Instrument):
                             ),
                             unit="V",
                         )
+
+                        # zi-nodes for output amplitudes
+                        getattr(
+                            self.core,
+                            f"out{out + 1}_amplitude{demod + 1}",
+                        ).zi_node = f"/SIGOUTS/{out}/AMPLITUDES/{demod}"
 
                         self.core.add_parameter(
                             f"out{out + 1}_amplitude{demod + 1}_enable",
