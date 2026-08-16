@@ -225,6 +225,14 @@ class Lockin(Instrument):
                         unit="deg",
                     )
 
+                    # timeconstant
+                    setattr(
+                        self, f"tc{demod + 1}", self.core.demods[demod].timeconstant
+                    )
+
+                    # filter order
+                    setattr(self, f"order{demod + 1}", self.core.demods[demod].order)
+
                     for out in range(2):
                         self.core.add_parameter(
                             f"out{out + 1}_amplitude{demod + 1}",
