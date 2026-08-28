@@ -345,22 +345,27 @@ class Lockin(Instrument):
 
 
 class Delay(Instrument):
-    def __init__(self, name, delay=0.1):
+    def __init__(self, name):
         super().__init__(name)
 
         self.num_time = 0
-        self.delay = delay
 
+        # for sweep use: Sweep(time, point_delay, n_samples*point_delay, n_samples, start_delay=point_delay, delay=point_delay)
         self.add_parameter(
             "time",
-            label="Time Delay",
-            set_cmd=self.set_delay,
-            unit=f"x ({delay}s)",
+            label="Time",
+            get_cmd=self.get_time,
+            set_cmd=self.set_time,
+            unit=f"s",
         )
 
-    def set_delay(self, number):
+    # delay comes from Sweep and is handled in stepper
+    def set_time(self, number):
         self.num_time += 1
-        sleep(self.delay)
+
+    # lets you add time to your station and make snapshot possible (getter is needed)
+    def get_time(self):
+        return None
 
 
 class DummyBaselSP1004a(Instrument):
