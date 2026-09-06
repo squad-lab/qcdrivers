@@ -1,7 +1,7 @@
 """
 Tests for the buffered instrument nodes.
 
-These nodes moved here from ``qcutils.buffered.instruments``; they are what
+These nodes moved here from ``qanary.buffered.instruments``; they are what
 every buffered measurement script imports.
 
 Scope: this module covers the node logic that is instrument-independent --
@@ -27,13 +27,10 @@ import pytest
 from stubs import Sweep
 
 from qcdrivers import buffered as instruments_module
-from qcdrivers.buffered import (
-    BufferedNodeBase,
-    NodeDelay,
-    NodeKeysightDMM,
-    NodeKeysightVNA,
-    NodeQDAC2,
-)
+from qcdrivers.buffered import BufferedNodeBase
+from qcdrivers.buffered.keysight import NodeKeysightDMM, NodeKeysightVNA
+from qcdrivers.buffered.qdevil import NodeQDAC2
+from qcdrivers.buffered.squad import NodeDelay
 
 
 class FakeParam:

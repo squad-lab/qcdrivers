@@ -1,10 +1,7 @@
 """
 Stand-ins for objects QCDrivers is handed by its callers.
 
-The buffered nodes are handed sweep objects by QCUtils. Depending on QCUtils
-here would invert the dependency -- QCUtils depends on QCDrivers -- so the
-suite carries its own stub matching the ``SweepLike`` protocol the nodes are
-written against.
+The buffered nodes are handed sweep objects by Qanary.
 
 """
 
@@ -16,7 +13,7 @@ __all__ = ["Sweep"]
 
 
 class Sweep:
-    """Stand-in for ``qcutils.sweep.Sweep``, satisfying ``SweepLike``."""
+    """Stand-in for ``qanary.sweep.Sweep``, satisfying ``SweepLike``."""
 
     def __init__(
         self,

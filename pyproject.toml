@@ -7,7 +7,7 @@ name = "qcdrivers"
 version = "0.1.0"
 authors = [
   { name="Spandan Anupam", email="s.anupam@fz-juelich.de" },
-  { name="Jyotirmaya Shivottam", email="jyotirmaya.shivottam@fz-juelich.de" },
+  { name="Jyotirmaya Shivottam", email="shivottam@proton.me" },
 ]
 description = "QCoDeS drivers for instruments used in the SQUAD Lab"
 readme = "README.md"
@@ -50,6 +50,7 @@ dev = [
 [project.urls]
 "Homepage" = "https://gitlab.com/squad-lab/qcdrivers"
 "Bug Tracker" = "https://gitlab.com/squad-lab/qcdrivers/-/issues"
+"SQUAD Lab" = "https://squad-lab.org/"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/qcdrivers"]

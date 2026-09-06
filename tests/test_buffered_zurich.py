@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 from stubs import Sweep
 
-from qcdrivers.buffered import NodeMFLI, NodeUHFLI
+from qcdrivers.buffered.zurich import NodeMFLI, NodeUHFLI
 
 
 class FakeLabOneModule:
