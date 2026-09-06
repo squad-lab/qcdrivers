@@ -1,10 +1,11 @@
 # %%
 
-import numpy as np
 import time
 
-from drivers.basel.dacs.dacs import BaselDac2
+import numpy as np
 from qcodes.instrument import Instrument
+
+from qcdrivers.basel.dacs import BaselDac2
 
 # %%
 
@@ -12,18 +13,18 @@ Instrument.close_all()
 
 dac = BaselDac2(name="dac", address="TCPIP0::192.168.0.108::23::SOCKET")
 
-#%%
+# %%
 
-dac.set_bandwidth_safely([1,2,3,4,5], high_bw=True)
-dac.activate_dac_channels([1,2,3,4,5])
+dac.set_bandwidth_safely([1, 2, 3, 4, 5], high_bw=True)
+dac.activate_dac_channels([1, 2, 3, 4, 5])
 
 
-#%% awg example
+# %% awg example
 
 
 gate_channel = 1
 n_points = 10
-dt = 30*1e-3
+dt = 30 * 1e-3
 v_start = 0
 v_stop = 1
 
@@ -42,23 +43,25 @@ gate.voltage(v_start)
 awg = dac.awga
 awg.enable(False)
 
-awg.write_awg_config({
-    "channel": gate_channel,
-    "cycles": 1,
-    "sampling_rate": dt,
-    "waveform": vg,
-})
+awg.write_awg_config(
+    {
+        "channel": gate_channel,
+        "cycles": 1,
+        "sampling_rate": dt,
+        "waveform": vg,
+    }
+)
 
 # Basel-AWG trigger
 awg.trigger("start only")
 
-#%% start the awg just so without any triggering - test with oscilloscope, choose single and correct trigger
+# %% start the awg just so without any triggering - test with oscilloscope, choose single and correct trigger
 
 awg.trigger("disable")
 awg.enable(True)
 
 
-#%%
+# %%
 
 # Langsame, gut sichtbare Rampe
 waveform = np.linspace(-1.0, 1.0, 20)
@@ -83,24 +86,24 @@ dac.awgc.trigger("start only")
 
 for awg in [dac.awga, dac.awgc]:
     awg.cycles(1)
-    awg.sampling_rate(0.3*1e-3)
+    awg.sampling_rate(0.3 * 1e-3)
     awg.length(len(waveform))
     awg.waveform(waveform)
 
-#%%
+# %%
 
 # Kurz warten, dann starten
 time.sleep(1)
 dac.awga.enable(True)
 
 
-#%%
+# %%
 
 # --------------------------------------------------
 # Einstellungen
 # --------------------------------------------------
 n_steps = 10
-step_time = 30e-3       # 10 ms pro eigentlichem Messpunkt
+step_time = 30e-3  # 10 ms pro eigentlichem Messpunkt
 sample_time = step_time / 2
 
 ramp = np.linspace(-1.0, 1.0, n_steps)
@@ -115,8 +118,8 @@ trigger_waveform = np.tile([0.0, 0.5], n_steps)
 # --------------------------------------------------
 # Ausgangskanäle einschalten
 # --------------------------------------------------
-dac.ch1.enable(True)     # Rampe
-dac.ch13.enable(True)    # Trigger-Ausgang
+dac.ch1.enable(True)  # Rampe
+dac.ch13.enable(True)  # Trigger-Ausgang
 
 
 # --------------------------------------------------
@@ -146,7 +149,7 @@ trigger_awg.sampling_rate(sample_time)
 trigger_awg.length(len(trigger_waveform))
 trigger_awg.waveform(trigger_waveform)
 
-#%%
+# %%
 
 time.sleep(0.2)
 
