@@ -9,7 +9,7 @@
 This repository collects and shares QCoDeS drivers that are not available through
 [qcodes](https://github.com/microsoft/qcodes) or the
 [contrib drivers](https://github.com/QCoDeS/Qcodes_contrib_drivers) repository.
-It may also contain proprietary drivers written by lab members, including drivers
+It may also contain proprietary drivers written by lab members of [SQUAD Lab](https://squad-lab.org/), including drivers
 developed in collaboration with partner companies.
 
 ## Installation
@@ -40,7 +40,12 @@ src/qcdrivers
 ├── rwth/           mux
 ├── squad/          curry, helpers, mux
 ├── stanford/       vccs
-└── buffered/       basel, keysight, qdevil, squad, zurich
+└── buffered/
+    ├── basel
+    ├── keysight
+    ├── qdevil
+    ├── squad
+    └── zurich
 ```
 
 Please follow this structure when adding a new driver, using the existing drivers
@@ -51,8 +56,9 @@ to keep imports short and convenient.
 
 ```python
 from qcdrivers.basel.dacs import BaselDac2
+from qcdrivers.buffered.keysight import NodeKeysightDMM
+from qcdrivers.buffered.qdevil import NodeQDAC2
 from qcdrivers.keysight.dmms import Keysight34461A
-from qcdrivers.buffered import NodeQDAC2, NodeKeysightDMM
 ```
 
 The drivers can be imported directly from their category package, as shown
@@ -69,8 +75,11 @@ print(dac.parameters)
 ### Buffered nodes
 
 A buffered node wraps a QCoDeS instrument and provides the interface used by a
-QCUtils buffered sweep: `register_sweep`, `register_dependent`, `run_sweep`,
+Qanary buffered sweep: `register_sweep`, `register_dependent`, `run_sweep`,
 `fetch`, `abort`, and `toplevel`.
+
+Import buffered nodes from their manufacturer package, for example
+`qcdrivers.buffered.qdevil` or `qcdrivers.buffered.keysight`.
 
 ## Development
 

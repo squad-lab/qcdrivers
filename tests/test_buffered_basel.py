@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 from stubs import Sweep
 
-from qcdrivers.buffered import NodeBaselDAC
+from qcdrivers.buffered.basel import NodeBaselDAC
 
 
 class RecordingValue:

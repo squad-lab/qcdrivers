@@ -1,12 +1,8 @@
 """
 Structural types shared by the buffered nodes.
 
-Buffered nodes are handed sweep objects by QCUtils. Naming the concrete
-``qcutils.sweep.Sweep`` here would make QCDrivers depend on QCUtils, which
-depends on QCDrivers in turn. The nodes only ever read attributes off those
-objects -- they never construct one, subclass one, or isinstance-check one --
-so a structural type is both sufficient and more accurate: ``CircularSweep``
-and ``SegmentedSweep`` satisfy it too, and neither subclasses ``Sweep``.
+Buffered nodes are handed sweep objects by Qanary. The nodes only ever read
+attributes off those objects.
 
 """
 
@@ -19,7 +15,7 @@ __all__ = ["SweepLike"]
 
 
 class SweepLike(Protocol):
-    """Any QCUtils sweep: ``Sweep``, ``CircularSweep`` or ``SegmentedSweep``."""
+    """Any Qanary sweep: ``Sweep``, ``CircularSweep`` or ``SegmentedSweep``."""
 
     parameter: Sequence[Parameter]
     values: np.ndarray
