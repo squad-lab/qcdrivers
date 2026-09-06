@@ -4,6 +4,7 @@
 [![tests](https://gitlab.com/squad-lab/qcdrivers/badges/main/pipeline.svg?job=pytest%3A%20%5B3.13%5D&ignore_skipped=true&key_text=tests&key_width=40)](https://gitlab.com/squad-lab/qcdrivers/-/pipelines?ref=main)
 [![coverage](https://gitlab.com/squad-lab/qcdrivers/badges/main/coverage.svg?key_text=coverage&key_width=64)](https://gitlab.com/squad-lab/qcdrivers/-/jobs)
 [![latest release](https://gitlab.com/squad-lab/qcdrivers/-/badges/release.svg?key_text=release&key_width=54)](https://gitlab.com/squad-lab/qcdrivers/-/releases)
+[![PyPI version](https://img.shields.io/pypi/v/qcdrivers.svg)](https://pypi.org/project/qcdrivers/)
 
 This repository collects and shares QCoDeS drivers that are not available through
 [qcodes](https://github.com/microsoft/qcodes) or the
