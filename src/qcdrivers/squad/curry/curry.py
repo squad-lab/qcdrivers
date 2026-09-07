@@ -7,6 +7,16 @@ def _unity() -> float:
     return 1.0
 
 
+def _wrapper_idn(model: str) -> dict[str, str | None]:
+    """Return the standard QCoDeS identity fields for a software wrapper."""
+    return {
+        "vendor": "SQUAD Lab",
+        "model": model,
+        "serial": None,
+        "firmware": None,
+    }
+
+
 class VCCS(Instrument):
     def __init__(
         self,
@@ -27,6 +37,9 @@ class VCCS(Instrument):
 
     def get_gain(self) -> float:
         return self._gain
+
+    def get_idn(self) -> dict[str, str | None]:
+        return _wrapper_idn("Voltage Controlled Current Source")
 
 
 class VoltageDivider(Instrument):
@@ -49,6 +62,9 @@ class VoltageDivider(Instrument):
 
     def get_value(self) -> float:
         return self._value
+
+    def get_idn(self) -> dict[str, str | None]:
+        return _wrapper_idn("Voltage Divider")
 
 
 class DiffConductance(Instrument):
@@ -227,6 +243,9 @@ class CurrentSource(Instrument):
     def get_current(self) -> float:
         return self.curr_setter() * self.vccs_ampl() - self.curr_offset
 
+    def get_idn(self) -> dict[str, str | None]:
+        return _wrapper_idn("Current Source")
+
 
 class CurrentMeasure(Instrument):
     def __init__(
@@ -264,6 +283,9 @@ class CurrentMeasure(Instrument):
 
     def get_current(self) -> float:
         return (self.curr_getter() / self.curr_ampl()) - self.curr_offset
+
+    def get_idn(self) -> dict[str, str | None]:
+        return _wrapper_idn("Current Measure")
 
 
 class VoltageSource(Instrument):
@@ -310,6 +332,9 @@ class VoltageSource(Instrument):
     def get_dac_voltage(self, v: float) -> float:
         return v / self.volt_divider()
 
+    def get_idn(self) -> dict[str, str | None]:
+        return _wrapper_idn("Voltage Source")
+
 
 class VoltageMeasure(Instrument):
     def __init__(
@@ -347,3 +372,6 @@ class VoltageMeasure(Instrument):
 
     def get_voltage(self) -> float:
         return (self.volt_getter() - self.volt_offset) / self.volt_ampl()
+
+    def get_idn(self) -> dict[str, str | None]:
+        return _wrapper_idn("Voltage Measure")
