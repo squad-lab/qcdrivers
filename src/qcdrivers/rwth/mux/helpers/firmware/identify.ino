@@ -14,13 +14,13 @@
 // Define the I2C address of the multiplexer
 
 
-#define I2CMUXADDR 0x70 
+#define I2CMUXADDR 0x70
 
 uint8_t ChannelSelect(uint8_t channel) {
  if (channel > 3) return 127; // illegal channel number, allowed channel number are 0,1,2,3
 
  Wire.beginTransmission(I2CMUXADDR); // start communicating with I2C multiplexer slave
- Wire.write((uint8_t)(0x04 + channel));// select the I2C channel 
+ Wire.write((uint8_t)(0x04 + channel));// select the I2C channel
  return Wire.endTransmission();
 }
 
@@ -72,10 +72,10 @@ void GlobalReset() {
 
 int MultiplexerNumber(uint8_t PIN) {
  if (PIN >= 1 && PIN <= 48) {
-   return ceil(PIN / 16.0); // i.e. ceil(5/16) = ceil(0.3125) = 1 (Pin 5 is on cip 1 ) 
+   return ceil(PIN / 16.0); // i.e. ceil(5/16) = ceil(0.3125) = 1 (Pin 5 is on cip 1 )
  }
  else if (PIN >= 51 && PIN <= 98) {
-   return 6 - (ceil((PIN - 2) / 16.0) - 4); // i.e. pin 52 would be on chip 6 
+   return 6 - (ceil((PIN - 2) / 16.0) - 4); // i.e. pin 52 would be on chip 6
  }
 }
 
@@ -129,7 +129,7 @@ int PINtoABxx(uint8_t PIN) {
    if (temp == 0) return 9;
    else if (temp >= 1 && temp <= 8) return temp;
    else return (16 - temp) + 9;
- } 
+ }
 }
 
 

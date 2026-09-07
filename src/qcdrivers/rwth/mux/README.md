@@ -4,7 +4,7 @@ QCoDeS and Python implementation of control for a multiplexer. The device is com
 ### MAX14661:
 The MAX14661 ia a dual-channel analog multiplexer controlled serially, enabling any of its 16 pins to connect to the either common pin in any combination simultaneously (16:2). Each switch is independently controlled via I2C. It allows ± 5.5V signals with a single supply voltage ranging from +1.6V to + 5.5V. [1]()
 
-### PCA9544A: 
+### PCA9544A:
 The PCA9544A is a 4-channel, bidirectional tranlating multiplexer that is controlled via I2C bus. It enables the SCL/SDA upstream pair to connect to four downstream channels (each channel is able to communicate with 4 device). [2]()
 
 ### Hardware:
@@ -40,7 +40,7 @@ We provide a description of how to use our driver. The Muxi class is initialized
 For more detailed examples, please consult [the test notebook](./test/mux_test.ipynb)
 
 QCoDeS Parameters Description:
-    
+
 1. `C{pin}_{output}`: Connection between a specific input pin and an output channel. Values can be 0  (disconnected) or 1 (connected).
 2. `output_channel_{n}`: Where n is the output channel number. Returns the list of input pins connected to that output.
 3. `input_channel_{n}`: Where n is the input pin number. Returns the list of output channels connected to that input.
@@ -53,4 +53,3 @@ QCoDeS Parameters Description:
 [1]: Maxim Integrated Products.(2015) Beyond-the-Rails 16:2 Multiplexer: MAX14661. https://www.analog.com/media/en/technical-documentation/data-sheets/MAX14661.pdf[Accessed 05th July 2024]
 
 [2]: Texas Instruments.(2023) PCA9544A Low Voltage 4-Channel I2C and SMBus Multiplexer With Interrupt Logic. https://www.ti.com/lit/ds/symlink/pca9544a.pdf?ts=1722720240987&ref_url=https%253A%252F%252Fwww.google.com%252F [Accessed 06th July 2024]
-
