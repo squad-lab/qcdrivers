@@ -60,7 +60,7 @@ class ADR(Instrument):
             get_cmd="QOHM 4K Stage\r\n",
             get_parser=float,
             unit="Ohm",
-            vals=Numbers(min_value=0, max_value=10),
+            # vals=Numbers(min_value=0, max_value=10),
         )
 
         # Reads GGG stage temperature
@@ -168,14 +168,17 @@ class ADR(Instrument):
             Parsed numeric value (first whitespace-separated token as float).
         """
         self.s.send(bytes(cmd, "utf-8"))
-        data = float(
-            self.s.recv(4096)
-            .decode("utf-8")
-            .strip("b")
-            .replace(",", "")
-            .replace("\r\n", "")
-            .split(" ")[0]
-        )
+        try:
+            data = float(
+                self.s.recv(4096)
+                .decode("utf-8")
+                .strip("b")
+                .replace(",", "")
+                .replace("\r\n", "")
+                .split(" ")[0]
+            )
+        except ValueError:
+            data = 0
         return data
 
     def send_raw(self, cmd: str):
@@ -227,3 +230,7 @@ class ADR(Instrument):
     def stopcompressor(self):
         """Stops pulse tube compressor"""
         self.send_raw("STARTCOMPRESSOR \r\n")
+
+    def get_idn(self):
+        """Return the instrument ID string."""
+        return {"vendor": "Entropy", "model": "ADR", "serial": "", "firmware": ""}
