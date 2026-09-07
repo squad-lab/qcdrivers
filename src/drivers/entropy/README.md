@@ -42,11 +42,7 @@ Upon initialization, the driver automatically:
 ```python
 from adr_driver import ADR
 
-adr = ADR(
-    name="adr",
-    address="192.168.0.10",
-    port=8080
-)
+adr = ADR(name="adr", address="192.168.0.10", port=8080)
 ```
 # QCoDeS Parameters Description
 
@@ -126,11 +122,7 @@ The controller:
 ## Example Usage
 
 ```python
-heater = Heater(
-    name="heater",
-    current_source=keithley,
-    adr=adr
-)
+heater = Heater(name="heater", current_source=keithley, adr=adr)
 ```
 # QCoDeS Parameters Description
 ---
