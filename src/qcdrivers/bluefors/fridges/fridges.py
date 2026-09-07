@@ -175,6 +175,14 @@ class BlueFors(Instrument):
                 docstring=f"Control for the PID of the {heater_name} heater",
             )
 
+    def get_idn(self) -> dict[str, str | None]:
+        return {
+            "vendor": "Bluefors",
+            "model": "Cryostat",
+            "serial": None,
+            "firmware": None,
+        }
+
     def _get_pressure(self, channel_nr: int = None):
         """
         Reads the current pressure from the cryostat

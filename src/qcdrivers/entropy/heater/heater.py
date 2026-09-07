@@ -67,6 +67,14 @@ class Heater(Instrument):
             vals=Numbers(min_value=0, max_value=350),
         )
 
+    def get_idn(self) -> dict[str, str | None]:
+        return {
+            "vendor": "SQUAD Lab",
+            "model": "Entropy ADR Heater Controller",
+            "serial": None,
+            "firmware": None,
+        }
+
     def read_temperature(self):
         """
         Reads temperature on 4K plate of adr instrument

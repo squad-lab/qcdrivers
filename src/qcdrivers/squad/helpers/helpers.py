@@ -19,6 +19,14 @@ class ShellInstrument(Instrument):
         for key, parameter in parameters.items():
             self.add_parameter(key, **parameter)
 
+    def get_idn(self) -> dict[str, str | None]:
+        return {
+            "vendor": "SQUAD Lab",
+            "model": "Shell Instrument",
+            "serial": None,
+            "firmware": None,
+        }
+
 
 # TODO: Split this per manufacturer. `Lockin` branches internally over Zurich
 # Instruments MFLI/UHFLI (and any future vendor); that belongs in
@@ -364,3 +372,11 @@ class Delay(Instrument):
     # lets you add time to your station and make snapshot possible (getter is needed)
     def get_time(self):
         return None
+
+    def get_idn(self) -> dict[str, str | None]:
+        return {
+            "vendor": "SQUAD Lab",
+            "model": "Delay",
+            "serial": None,
+            "firmware": None,
+        }
