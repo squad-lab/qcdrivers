@@ -18,7 +18,7 @@ uint8_t PINtoM(uint8_t PIN, uint8_t M, uint8_t state) {
     val += Wire.endTransmission();
 
     Wire.requestFrom((uint8_t)ICADDR, (uint8_t)1);
-    uint8_t currentdata = Wire.read(); // get current data stored in the register 
+    uint8_t currentdata = Wire.read(); // get current data stored in the register
 
     Wire.beginTransmission(ICADDR); // start communication with concerned IC
     Wire.write(REGISTER); // pick concerned internal register of IC
@@ -60,7 +60,7 @@ uint8_t PINtoMStatus(uint8_t PIN, uint8_t M) {
     val += Wire.endTransmission();
 
     Wire.requestFrom((uint8_t)ICADDR, (uint8_t)1);
-    uint8_t currentdata = Wire.read(); // get current data stored in the register 
+    uint8_t currentdata = Wire.read(); // get current data stored in the register
 
     if (val != 0)  connection = 255; // failed I2C communication somewhere above
     else { // successful I2C communication
