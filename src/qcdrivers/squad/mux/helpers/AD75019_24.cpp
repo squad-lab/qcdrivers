@@ -6,25 +6,25 @@ void _ad75019_24_pinModeDefault(uint8_t pinNumber, uint8_t /* unused */) {
   pinMode(pinNumber, OUTPUT);
 }
 
-// Optimized digitalWriteCallback using direct register access on ARM 
-//Direct manipulation of the registers is much faster than using a higher-level function like digitalWrite(). 
+// Optimized digitalWriteCallback using direct register access on ARM
+//Direct manipulation of the registers is much faster than using a higher-level function like digitalWrite().
 //This is because it eliminates the overhead of additional checks and abstractions.
 void _ad75019_24_digitalWriteCallback(uint8_t pinNumber, uint8_t value) {//value = HIGH/LOW
-  //Pio is a port on the microcontroller, Pio* is a pointer to this port 
-  //g_APinDescription is an array that holds info of each pin on Arduino board 
-  //pPort is a pointer to the port that controls the pin 
+  //Pio is a port on the microcontroller, Pio* is a pointer to this port
+  //g_APinDescription is an array that holds info of each pin on Arduino board
+  //pPort is a pointer to the port that controls the pin
   Pio* port = g_APinDescription[pinNumber].pPort;
-  //ulPin is the bitmask for the pin 
-  //Each pin in a port corresponds to a specific bit in the port's register, 
+  //ulPin is the bitmask for the pin
+  //Each pin in a port corresponds to a specific bit in the port's register,
   //i.e.  if a pin corresponds to the third bit in the register, ulPin would be 0b00000000000000000000000000000100
   uint32_t pinMask = g_APinDescription[pinNumber].ulPin;
 
   if (value == HIGH) {
-    port->PIO_SODR = pinMask; // PIO_SODR (Set Output Data Register) 
-                              // = pinMask, specific bit corresponding to the pin will be set to 1 
+    port->PIO_SODR = pinMask; // PIO_SODR (Set Output Data Register)
+                              // = pinMask, specific bit corresponding to the pin will be set to 1
   } else {
-    port->PIO_CODR = pinMask; // PIO_CODR (Clear Output Data Register) 
-                              // = pinMaks, specific bit corresponding to the pin will be set to 0 
+    port->PIO_CODR = pinMask; // PIO_CODR (Clear Output Data Register)
+                              // = pinMaks, specific bit corresponding to the pin will be set to 0
   }
 }
 
@@ -36,7 +36,7 @@ AD75019_24::AD75019_24(uint8_t pclkPinNumber, uint8_t sclkPinNumber, uint8_t sin
 }
 
 // Constructor with custom callbacks
-AD75019_24::AD75019_24(uint8_t pclkPinNumber, uint8_t sclkPinNumber, uint8_t sinPinNumber, 
+AD75019_24::AD75019_24(uint8_t pclkPinNumber, uint8_t sclkPinNumber, uint8_t sinPinNumber,
           void (*pinModeCallback)(uint8_t, uint8_t), void (*digitalWriteCallback)(uint8_t, uint8_t))
   : _pclkPinNumber(pclkPinNumber), _sclkPinNumber(sclkPinNumber), _sinPinNumber(sinPinNumber),
     _pinModeCallback(pinModeCallback), _digitalWriteCallback(digitalWriteCallback) {}
@@ -94,7 +94,7 @@ bool AD75019_24::isRouted(uint8_t x, uint8_t y) {
 
 void AD75019_24::flush() {
 	if (!isBegun()) return;
-   /**  
+   /**
   for (int8_t y = 31; y > -1; y--) {
     for (int8_t x = 31; x > -1; x--) {
       _digitalWriteCallback(_sclkPinNumber, HIGH);
@@ -191,7 +191,3 @@ void AD75019_24::setUseDefaultCallbacks(bool b) {
 bool AD75019_24::isUseDefaultCallbacks() {
     return bitRead(_state, 0);
 }
-
-
-
-

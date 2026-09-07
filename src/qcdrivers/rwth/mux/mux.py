@@ -17,7 +17,7 @@ from qcodes.instrument import VisaInstrument
 
 """
 Creating a colourmap with name 'switch'
-color poits: white, red, green 
+color poits: white, red, green
 """
 switch = LinearSegmentedColormap.from_list(
     "switch",

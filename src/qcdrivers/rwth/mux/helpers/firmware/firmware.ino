@@ -63,7 +63,7 @@ void setup() {
     pinMode(ShutDownPins[i - 1], OUTPUT);
     digitalWrite(ShutDownPins[i - 1], LOW); // active low shut down // turning all OFF initially
   }
-  analogWriteResolution(12);  
+  analogWriteResolution(12);
   analogReadResolution(12);
 //  pinMode(A1, INPUT);
   pinMode(A6, INPUT);
@@ -96,12 +96,12 @@ void Reset(SCPI_C commands, SCPI_P parameters, Stream& interface) {
   }
 }
 
-void dynamicDelay(uint8_t pin) { 
-  unsigned long startTime = millis(); 
-  while (millis() - startTime < 200) { // Max delay of 200 ms 
-  if (digitalRead(pin) == LOW) { // Check if the pin has gone low (shutdown complete) 
-  break; } 
-  delay(10); // Check every 10 ms 
+void dynamicDelay(uint8_t pin) {
+  unsigned long startTime = millis();
+  while (millis() - startTime < 200) { // Max delay of 200 ms
+  if (digitalRead(pin) == LOW) { // Check if the pin has gone low (shutdown complete)
+  break; }
+  delay(10); // Check every 10 ms
   }
 }
 

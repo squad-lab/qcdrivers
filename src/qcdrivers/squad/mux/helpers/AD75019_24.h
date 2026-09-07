@@ -32,11 +32,11 @@ class AD75019_24 {
     /*
      * AD75019 constructor using custom callback functions to initialize
      * the pins and perform digital writes. These are necessary
-     * when interacting with the device through a port expander such 
+     * when interacting with the device through a port expander such
      * as the MCP23017.
      */
     typedef void (*voidFuncCallback_t)(uint8_t i, uint8_t v);
-    AD75019_24(uint8_t pclkPinNumber, uint8_t sclkPinNumber, uint8_t sinPinNumber, 
+    AD75019_24(uint8_t pclkPinNumber, uint8_t sclkPinNumber, uint8_t sinPinNumber,
         voidFuncCallback_t pinModeCallback, voidFuncCallback_t digitalWriteCallback);
 
     /*
@@ -49,14 +49,14 @@ class AD75019_24 {
      * Sets the pinModes and initializes using a custom X and Y pin mappings.
      * Returns true if successful.
      *
-     * xPinMapping, yPinMapping - 16-element arrays with element values 
+     * xPinMapping, yPinMapping - 16-element arrays with element values
      *    between 0-15 containing no repeated values. The array elements
      *    correspond to the actual X and Y pins on the AD75019.
      */
     bool begin(uint8_t xPinMapping[32], uint8_t yPinMapping[32]);
 
     /*
-     * Update the configuration buffer adding a route between the specified X 
+     * Update the configuration buffer adding a route between the specified X
      * and Y pins (after applying any pin re-mapping)
      *
      * x - a number from 0-15
@@ -111,7 +111,7 @@ class AD75019_24 {
 
     voidFuncCallback_t _pinModeCallback = NULL;
     voidFuncCallback_t _digitalWriteCallback = NULL;
-    
+
     uint8_t _xPinMapping[32] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31 };
     uint8_t _yPinMapping[32] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31 };
 

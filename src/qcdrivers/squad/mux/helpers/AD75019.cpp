@@ -26,7 +26,7 @@ AD75019::AD75019(uint8_t pclkPinNumber, uint8_t sclkPinNumber, uint8_t sinPinNum
     setUseDefaultCallbacks(true);
  }
 
-AD75019::AD75019(uint8_t pclkPinNumber, uint8_t sclkPinNumber, uint8_t sinPinNumber, 
+AD75019::AD75019(uint8_t pclkPinNumber, uint8_t sclkPinNumber, uint8_t sinPinNumber,
           voidFuncCallback_t pinModeCallback, voidFuncCallback_t digitalWriteCallback):
   _pclkPinNumber(pclkPinNumber), _sclkPinNumber(sclkPinNumber), _sinPinNumber(sinPinNumber),
   _pinModeCallback(pinModeCallback), _digitalWriteCallback(digitalWriteCallback) {}
