@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.2.3 (2026-09-07)
+
+### Bug Fixes
+
+- Refactor ADR driver for improved socket handling and response parsing
+  ([`6898c04`](https://gitlab.com/squad-lab/qcdrivers/-/commit/6898c04156448ca975369bd0f039437158f168b4))
+
+
 ## v0.2.2 (2026-09-07)
 
 ### Bug Fixes
