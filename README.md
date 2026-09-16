@@ -41,11 +41,11 @@ src/qcdrivers
 ├── squad/          curry, helpers, mux
 ├── stanford/       vccs
 └── buffered/
-    ├── basel
-    ├── keysight
-    ├── qdevil
-    ├── squad
-    └── zurich
+    ├── basel/
+    ├── keysight/
+    ├── qdevil/
+    ├── squad/
+    └── zurich/
 ```
 
 Please follow this structure when adding a new driver, using the existing drivers
