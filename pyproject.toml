@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "qcdrivers"
-version = "0.2.2"
+version = "0.3.0"
 authors = [
   { name="Spandan Anupam", email="s.anupam@fz-juelich.de" },
   { name="Jyotirmaya Shivottam", email="shivottam@proton.me" },

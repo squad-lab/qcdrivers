@@ -2,6 +2,32 @@
 
 <!-- version list -->
 
+## v0.3.0 (2026-09-16)
+
+### Continuous Integration
+
+- Apply ruff fixes on the branch instead of failing
+  ([`a846c15`](https://gitlab.com/squad-lab/qcdrivers/-/commit/a846c159230a56afe544d6d3cb3415c54da0a410))
+
+### Documentation
+
+- Restructure the contributing guide
+  ([`a091d00`](https://gitlab.com/squad-lab/qcdrivers/-/commit/a091d00257a4d2a00ef28bdc9b6424bc1ed55778))
+
+### Features
+
+- Document the development and release workflow for contributors
+  ([`aaa9560`](https://gitlab.com/squad-lab/qcdrivers/-/commit/aaa9560ebf3f7905d635cfaa266a8f84692062bf))
+
+
+## v0.2.3 (2026-09-07)
+
+### Bug Fixes
+
+- Refactor ADR driver for improved socket handling and response parsing
+  ([`6898c04`](https://gitlab.com/squad-lab/qcdrivers/-/commit/6898c04156448ca975369bd0f039437158f168b4))
+
+
 ## v0.2.2 (2026-09-07)
 
 ### Bug Fixes

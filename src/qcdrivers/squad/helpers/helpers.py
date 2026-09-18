@@ -28,6 +28,23 @@ class ShellInstrument(Instrument):
         }
 
 
+### helper functions ###
+
+
+def dbm_to_vpk(power_dbm, out_impedance=50):
+    power_w = 1e-3 * 10 ** (power_dbm / 10)
+    vrms = np.sqrt(power_w * out_impedance)
+    return np.sqrt(2) * vrms
+
+
+def vpk_to_dbm(vpk, out_impedance=50):
+    power_w = vpk**2 / (2 * out_impedance)
+    return 10 * np.log10(power_w / 1e-3)
+
+
+########################
+
+
 # TODO: Split this per manufacturer. `Lockin` branches internally over Zurich
 # Instruments MFLI/UHFLI (and any future vendor); that belongs in
 # per-manufacturer drivers under `qcdrivers.zurich` rather than in a SQUAD-wide
@@ -152,11 +169,20 @@ class Lockin(Instrument):
                 for i in [0, 1, 2, 3]:
                     self.core.triggers.in_[i].imp50(0)
 
+                self.in1_ac = self.core.sigins[0].ac
+                self.in2_ac = self.core.sigins[1].ac
+
+                self.in1_imp50 = self.core.sigins[0].imp50
+                self.in2_imp50 = self.core.sigins[1].imp50
+
                 self.on1 = self.sigouts[0].on
                 self.on2 = self.sigouts[1].on
 
                 self.autosigout1 = self.core.sigouts[0].autorange
                 self.autosigout2 = self.core.sigouts[1].autorange
+
+                self.out1_imp50 = self.core.sigouts[0].imp50
+                self.out2_imp50 = self.core.sigouts[1].imp50
 
                 self.offset_out1 = self.core.sigouts[0].offset
                 self.offset_out2 = self.core.sigouts[1].offset
@@ -251,6 +277,28 @@ class Lockin(Instrument):
                                 self.core.sigouts[o].amplitudes[d].value(val)
                             ),
                             unit="V",
+                        )
+
+                        # dbm power - attention: when setting dbm power,the 50Ohm out is automatiacally activated.
+                        def _get_power_dbm(o=out, d=demod):
+                            vpk = self.core.sigouts[o].amplitudes[d].value()
+                            return vpk_to_dbm(vpk)
+
+                        def _set_power_dbm(val, o=out, d=demod):
+                            # Enable 50 Ohm output termination
+                            self.core.sigouts[o].imp50(1)
+
+                            # Convert dBm -> Vpk and set amplitude
+                            vpk = dbm_to_vpk(val)
+                            self.core.sigouts[o].amplitudes[d].value(vpk)
+
+                        self.core.add_parameter(
+                            f"out{out + 1}_power{demod + 1}_dbm",
+                            label=f"{name} out{out + 1} power {demod + 1} dBm",
+                            get_cmd=_get_power_dbm,
+                            set_cmd=_set_power_dbm,
+                            get_parser=float,
+                            unit="dBm",
                         )
 
                         # zi-nodes for output amplitudes
