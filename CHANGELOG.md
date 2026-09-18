@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.4.0 (2026-09-18)
+
+### Features
+
+- Add helper functions for power conversion and enhance Lockin class with dBm power parameter
+  ([`0111287`](https://gitlab.com/squad-lab/qcdrivers/-/commit/0111287e4045974ecbdbada05d0e3e322edbd8b4))
+
+
 ## v0.3.0 (2026-09-16)
 
 ### Continuous Integration
