@@ -23,9 +23,7 @@ class ShellInstrument(Instrument):
         if cmd == "*IDN?":
             return "SQUAD Lab,Shell Instrument,,"
 
-        raise NotImplementedError(
-            f"{type(self).__name__} does not support {cmd!r}"
-        )
+        raise NotImplementedError(f"{type(self).__name__} does not support {cmd!r}")
 
 
 ### helper functions ###
