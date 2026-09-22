@@ -2,8 +2,8 @@
 
 from time import sleep
 from typing import Sequence
-import numpy as np
 
+import numpy as np
 from qcodes.instrument import Instrument
 from qcodes.parameters import Parameter
 
@@ -158,11 +158,9 @@ class NodeDummyAcquisition(BufferedNodeBase):
             + self.noise * self.rng.standard_normal(n)
         )
 
-        p_data = (
-            30.0
-            * np.sin(2 * np.pi * 0.2 * t + frame_phase)
-            + self.noise * 10 * self.rng.standard_normal(n)
-        )
+        p_data = 30.0 * np.sin(
+            2 * np.pi * 0.2 * t + frame_phase
+        ) + self.noise * 10 * self.rng.standard_normal(n)
 
         arrays = []
 
@@ -175,9 +173,7 @@ class NodeDummyAcquisition(BufferedNodeBase):
 
             else:
                 # Generic fallback for additional dummy dependents.
-                arrays.append(
-                    self.rng.standard_normal(n)
-                )
+                arrays.append(self.rng.standard_normal(n))
 
         self.frame += 1
 
