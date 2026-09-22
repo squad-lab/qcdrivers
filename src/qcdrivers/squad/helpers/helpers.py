@@ -19,13 +19,13 @@ class ShellInstrument(Instrument):
         for key, parameter in parameters.items():
             self.add_parameter(key, **parameter)
 
-    def get_idn(self) -> dict[str, str | None]:
-        return {
-            "vendor": "SQUAD Lab",
-            "model": "Shell Instrument",
-            "serial": None,
-            "firmware": None,
-        }
+    def ask_raw(self, cmd: str) -> str:
+        if cmd == "*IDN?":
+            return "SQUAD Lab,Shell Instrument,,"
+
+        raise NotImplementedError(
+            f"{type(self).__name__} does not support {cmd!r}"
+        )
 
 
 ### helper functions ###
