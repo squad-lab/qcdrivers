@@ -2,8 +2,10 @@
 
 from time import sleep
 from typing import Sequence
+import numpy as np
 
 from qcodes.instrument import Instrument
+from qcodes.parameters import Parameter
 
 from qcdrivers.buffered._typing import SweepLike
 from qcdrivers.buffered.base import BufferedNodeBase
@@ -89,3 +91,94 @@ class NodeDelay(BufferedNodeBase):
         """
         if self.toplevel:
             sleep((self.num + 1) * self.delay)
+
+
+class NodeDummyAcquisition(BufferedNodeBase):
+    """
+    Buffered dummy acquisition node.
+
+    Mimics something like NodeMFLI:
+        register_dependent(...)
+        fetch() -> list[np.ndarray]
+    """
+
+    def __init__(
+        self,
+        inst: Instrument,
+        *,
+        noise: float = 0.01,
+        seed: int | None = 42,
+    ):
+        super().__init__(inst=inst)
+
+        self.noise = noise
+        self.rng = np.random.default_rng(seed)
+
+        self.num = 0
+        self.delay = 0.0
+        self.frame = 0
+
+    def register_dependent(
+        self,
+        dependent: Parameter | Sequence[Parameter],
+        num: int | Sequence[int],
+        delay: float,
+        **kwargs,
+    ) -> None:
+        """
+        Qanary calls this while arming the buffered tree.
+        """
+
+        self._process_dependents(dependent)
+
+        if isinstance(num, Sequence) and not isinstance(num, (str, bytes)):
+            self.num = int(np.prod(num))
+        else:
+            self.num = int(num)
+
+        self.delay = float(delay)
+
+    def fetch(self) -> list[np.ndarray]:
+        """
+        Return one flattened array for every registered dependent.
+        """
+
+        n = self.num
+
+        # Synthetic time coordinate for producing nice dummy data.
+        t = np.arange(n) * self.delay
+
+        # Slowly change the signal from frame to frame so that you
+        # can actually see LiveTuning refreshing in Qimchi.
+        frame_phase = self.frame * 0.3
+
+        r_data = (
+            1.0
+            + 0.25 * np.sin(2 * np.pi * 0.5 * t + frame_phase)
+            + self.noise * self.rng.standard_normal(n)
+        )
+
+        p_data = (
+            30.0
+            * np.sin(2 * np.pi * 0.2 * t + frame_phase)
+            + self.noise * 10 * self.rng.standard_normal(n)
+        )
+
+        arrays = []
+
+        for dependent in self.dependents:
+            if dependent.name.lower() in {"r", "dummy_r"}:
+                arrays.append(r_data)
+
+            elif dependent.name.lower() in {"p", "dummy_p"}:
+                arrays.append(p_data)
+
+            else:
+                # Generic fallback for additional dummy dependents.
+                arrays.append(
+                    self.rng.standard_normal(n)
+                )
+
+        self.frame += 1
+
+        return arrays
