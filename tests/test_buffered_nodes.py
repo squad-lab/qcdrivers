@@ -30,7 +30,7 @@ from qcdrivers import buffered as instruments_module
 from qcdrivers.buffered import BufferedNodeBase
 from qcdrivers.buffered.keysight import NodeKeysightDMM, NodeKeysightVNA
 from qcdrivers.buffered.qdevil import NodeQDAC2
-from qcdrivers.buffered.squad import NodeDelay
+from qcdrivers.buffered.squad import NodeDummySweeper
 
 
 class FakeParam:
@@ -186,12 +186,12 @@ class TestBufferedNodeBase:
         assert node.abort() is None
 
 
-class TestNodeDelay:
+class TestNodeDummySweeper:
     """A virtual sweep node: it defines a timebase and steps nothing."""
 
     @pytest.fixture
     def node(self):
-        return NodeDelay(inst=SimpleNamespace(name="delay"))
+        return NodeDummySweeper(inst=SimpleNamespace(name="delay"))
 
     def test_registering_returns_the_point_count_and_spacing(self, node, gates):
         result = node.register_sweep(Sweep(gates.x, 0.0, 1.0, num=10, delay=0.05))
