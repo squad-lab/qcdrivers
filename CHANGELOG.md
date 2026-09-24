@@ -2,6 +2,22 @@
 
 <!-- version list -->
 
+## v0.5.0 (2026-09-24)
+
+### Features
+
+- Added dummy acqusition node immitating a triggered lock-in or dmm
+  ([`f276921`](https://gitlab.com/squad-lab/qcdrivers/-/commit/f276921593e8ec4c13748d7fd231624f212d4d35))
+
+
+## v0.4.0 (2026-09-18)
+
+### Features
+
+- Add helper functions for power conversion and enhance Lockin class with dBm power parameter
+  ([`0111287`](https://gitlab.com/squad-lab/qcdrivers/-/commit/0111287e4045974ecbdbada05d0e3e322edbd8b4))
+
+
 ## v0.3.0 (2026-09-16)
 
 ### Continuous Integration
