@@ -198,14 +198,17 @@ class TestNodeDummySweeper:
 
         assert result == (None, 10, 0.05)
 
-    def test_only_one_dimension_is_supported(self, node, gates):
-        with pytest.raises(ValueError, match="only supports 1D"):
-            node.register_sweep(
-                [
-                    Sweep(gates.x, 0.0, 1.0, num=4, delay=0.01),
-                    Sweep(gates.y, 0.0, 1.0, num=4, delay=0.01),
-                ]
-            )
+    def test_two_dimensions_are_supported(self, node, gates):
+        result = node.register_sweep(
+            [
+                Sweep(gates.x, 0.0, 1.0, num=4, delay=0.01),
+                Sweep(gates.y, 0.0, 1.0, num=5, delay=0.01),
+            ]
+        )
+
+        assert result == (None, (4, 5), 0.01)
+        assert node.shape == (4, 5)
+        assert node.total_num == 20
 
     def test_as_the_root_it_holds_the_acquisition_window_open(
         self, node, gates, monkeypatch
