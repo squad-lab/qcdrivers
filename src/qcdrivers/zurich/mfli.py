@@ -123,7 +123,7 @@ class MFLI(Instrument):
 
     def get_idn(self) -> dict:
         return self.core.get_idn()
-    
+
     def __getattr__(self, name):
         # Avoid recursion for attributes that truly don't exist yet
         if name == "core":
