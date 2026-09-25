@@ -236,6 +236,19 @@ class UHFLI(Instrument):
 
         return unit
 
+    def delay(self, order, tc) -> float:
+        filter_settling = {
+            1: 3 * tc,
+            2: 4.7 * tc,
+            3: 6.3 * tc,
+            4: 7.8 * tc,
+            5: 9.2 * tc,
+            6: 11 * tc,
+            7: 12 * tc,
+            8: 13 * tc,
+        }
+        return filter_settling[int(order)]
+
     def get_idn(self) -> dict:
         return self.core.get_idn()
 
