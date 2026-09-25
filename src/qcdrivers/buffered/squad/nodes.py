@@ -11,7 +11,7 @@ from qcodes.parameters import Parameter
 from qcdrivers.buffered._typing import SweepLike
 from qcdrivers.buffered.base import BufferedNodeBase
 
-__all__ = ["NodeDummySweeper"]
+__all__ = ["NodeDummySweeper", "NodeDummyAcquisition"]
 
 
 class NodeDummySweeper(BufferedNodeBase):
@@ -165,6 +165,14 @@ class NodeDummyAcquisition(BufferedNodeBase):
         fetch() -> list[np.ndarray]
     """
 
+    def _get_optional_parameter(self, name: str) -> float | None:
+        param = getattr(self.core, name, None)
+
+        if param is None:
+            return None
+
+        return float(param())
+
     def __init__(
         self,
         inst: Instrument,
@@ -173,6 +181,8 @@ class NodeDummyAcquisition(BufferedNodeBase):
         seed: int | None = 42,
     ):
         super().__init__(inst=inst)
+
+        self.shape = ()
 
         self.noise = noise
         self.rng = np.random.default_rng(seed)
@@ -195,8 +205,10 @@ class NodeDummyAcquisition(BufferedNodeBase):
         self._process_dependents(dependent)
 
         if isinstance(num, Sequence) and not isinstance(num, (str, bytes)):
+            self.shape = tuple(int(n) for n in num)
             self.num = int(np.prod(num))
         else:
+            self.shape = (int(num),)
             self.num = int(num)
 
         self.delay = float(delay)
@@ -204,39 +216,62 @@ class NodeDummyAcquisition(BufferedNodeBase):
     def fetch(self) -> list[np.ndarray]:
         """
         Return one flattened array for every registered dependent.
+
+        If control parameters are present on the dummy instrument, generate
+        deterministic data controlled by those parameters. Otherwise return
+        random data.
         """
+        param_x = self._get_optional_parameter("param_x")
+        param_y = self._get_optional_parameter("param_y")
 
-        n = self.num
+        # No control parameters -> plain random dummy data
+        if param_x is None and param_y is None:
+            arrays = [
+                self.rng.standard_normal(self.num)
+                for _ in self.dependents
+            ]
 
-        # Synthetic time coordinate for producing nice dummy data.
-        t = np.arange(n) * self.delay
+            self.frame += 1
+            return arrays
 
-        # Slowly change the signal from frame to frame so that you
-        # can actually see LiveTuning refreshing in Qimchi.
-        frame_phase = self.frame * 0.3
+        # One control parameter -> 1D Gaussian
+        if param_x is not None and param_y is None:
+            x = np.linspace(-1.0, 1.0, self.num)
 
-        r_data = (
-            1.0
-            + 0.25 * np.sin(2 * np.pi * 0.5 * t + frame_phase)
-            + self.noise * self.rng.standard_normal(n)
-        )
+            sigma = 0.15
+            data = np.exp(-(x - param_x) ** 2 / (2 * sigma**2))
 
-        p_data = 30.0 * np.sin(
-            2 * np.pi * 0.2 * t + frame_phase
-        ) + self.noise * 10 * self.rng.standard_normal(n)
+        # Two control parameters -> 2D Gaussian
+        else:
+            if len(self.shape) != 2:
+                raise RuntimeError(
+                    "Two dummy control parameters require a 2D sweep."
+                )
+
+            ny, nx = self.shape
+
+            x = np.linspace(-1.0, 1.0, nx)
+            y = np.linspace(-1.0, 1.0, ny)
+
+            X, Y = np.meshgrid(x, y, indexing="xy")
+
+            sigma = 0.15
+
+            data = np.exp(
+                -(
+                    (X - param_x) ** 2
+                    + (Y - param_y) ** 2
+                )
+                / (2 * sigma**2)
+            )
+
+        if self.noise > 0:
+            data = data + self.noise * self.rng.standard_normal(data.shape)
 
         arrays = []
 
         for dependent in self.dependents:
-            if dependent.name.lower() in {"r", "dummy_r"}:
-                arrays.append(r_data)
-
-            elif dependent.name.lower() in {"p", "dummy_p"}:
-                arrays.append(p_data)
-
-            else:
-                # Generic fallback for additional dummy dependents.
-                arrays.append(self.rng.standard_normal(n))
+            arrays.append(np.asarray(data).ravel())
 
         self.frame += 1
 

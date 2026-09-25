@@ -17,6 +17,7 @@ PUBLIC_APIS = {
     "qcdrivers.buffered.keysight": {"NodeKeysightDMM", "NodeKeysightVNA"},
     "qcdrivers.buffered.qdevil": {"NodeQDAC2"},
     "qcdrivers.buffered.squad": {"NodeDummySweeper"},
+    "qcdrivers.buffered.squad": {"NodeDummyAcquisition"},
     "qcdrivers.buffered.zurich": {"NodeMFLI", "NodeUHFLI"},
     "qcdrivers.entropy.adr": {"ADR"},
     "qcdrivers.entropy.heater": {"Heater"},
@@ -62,6 +63,7 @@ def test_concrete_buffered_nodes_are_not_exported_from_the_root_package():
     node_names = {
         "NodeBaselDAC",
         "NodeDummySweeper",
+        "NodeDummyAcquisition",
         "NodeKeysightDMM",
         "NodeKeysightVNA",
         "NodeMFLI",

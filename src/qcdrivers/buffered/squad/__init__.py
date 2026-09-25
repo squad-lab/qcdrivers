@@ -1,5 +1,5 @@
 """Buffered nodes for SQUAD instruments."""
 
-from qcdrivers.buffered.squad.nodes import NodeDummySweeper
+from qcdrivers.buffered.squad.nodes import NodeDummySweeper, NodeDummyAcquisition
 
-__all__ = ["NodeDummySweeper"]
+__all__ = ["NodeDummySweeper", "NodeDummyAcquisition"]
