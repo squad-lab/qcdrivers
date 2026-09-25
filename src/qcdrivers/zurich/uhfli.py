@@ -1,15 +1,12 @@
-
 import types
 from collections.abc import Sequence
 
 import numpy as np
 from qcodes.instrument import Instrument
-
 from zhinst.qcodes import UHFLI as ZIUHFLI
 
-
-
 # helper functions
+
 
 def dbm_to_vpk(power_dbm: float, out_impedance: float = 50) -> float:
     power_w = 1e-3 * 10 ** (power_dbm / 10)
@@ -24,11 +21,7 @@ def vpk_to_dbm(vpk: float, out_impedance: float = 50) -> float:
 
     power_w = vpk**2 / (2 * out_impedance)
 
-    return float(
-        10 * np.log10(power_w / 1e-3)
-    )
-
-
+    return float(10 * np.log10(power_w / 1e-3))
 
 
 class UHFLI(Instrument):
@@ -131,9 +124,7 @@ class UHFLI(Instrument):
             )
 
             # add zi-nodes
-            getattr(
-                self.core, f"R{demod + 1}"
-            ).zi_node = f"/DEMODS/{demod}/SAMPLE.R"
+            getattr(self.core, f"R{demod + 1}").zi_node = f"/DEMODS/{demod}/SAMPLE.R"
             getattr(
                 self.core, f"P{demod + 1}"
             ).zi_node = f"/DEMODS/{demod}/SAMPLE.THETA"
@@ -144,16 +135,12 @@ class UHFLI(Instrument):
                 label=f"{name} Phase{demod + 1}",
                 get_parser=float,
                 get_cmd=self.core.demods[demod].phaseshift,
-                set_cmd=lambda val, d=demod: self.core.demods[d].phaseshift(
-                    val
-                ),
+                set_cmd=lambda val, d=demod: self.core.demods[d].phaseshift(val),
                 unit="deg",
             )
 
             # timeconstant
-            setattr(
-                self, f"tc{demod + 1}", self.core.demods[demod].timeconstant
-            )
+            setattr(self, f"tc{demod + 1}", self.core.demods[demod].timeconstant)
 
             # filter order
             setattr(self, f"order{demod + 1}", self.core.demods[demod].order)
@@ -224,7 +211,6 @@ class UHFLI(Instrument):
 
             _adc_param.set_raw = types.MethodType(_new_set_raw, _adc_param)
 
-
     def r_val(self, demod=0) -> float:
         sample = self.core.demods[demod].sample()
 
@@ -232,7 +218,7 @@ class UHFLI(Instrument):
         y = sample["y"][0]
 
         return float(np.abs(x + 1j * y))
-    
+
     def p_val(self, demod=0) -> float:
         sample = self.core.demods[demod].sample()
 
@@ -240,7 +226,7 @@ class UHFLI(Instrument):
         y = sample["y"][0]
 
         return float(np.rad2deg(np.arctan2(y, x)))
-    
+
     def get_r_unit(self, demods=0) -> str:
         match self.core.demods[demods].adcselect():
             case 0:

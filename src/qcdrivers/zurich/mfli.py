@@ -1,9 +1,7 @@
-
 import types
 
 import numpy as np
 from qcodes.instrument import Instrument
-
 from zhinst.qcodes import MFLI as ZIMFLI
 
 
@@ -31,14 +29,13 @@ class MFLI(Instrument):
             **kwargs,
         )
 
-
         self.frequency = self.core.oscs[0].freq
         self.amplitude = self.core.sigouts[0].amplitudes[1].value
         self.on = self.sigouts[0].on
 
-        self.select_input = (
-            self.core.demods[0].adcselect
-        )  # call 0 for voltage (Sig In 1) and 1 for current (Curr In 1)
+        self.select_input = self.core.demods[
+            0
+        ].adcselect  # call 0 for voltage (Sig In 1) and 1 for current (Curr In 1)
 
         self.add = self.core.sigouts[0].add
         self.diff = self.core.sigouts[0].diff
@@ -99,7 +96,6 @@ class MFLI(Instrument):
 
         _adc_param.set_raw = types.MethodType(_new_set_raw, _adc_param)
 
-
     def r_val(self, demod=0) -> float:
         sample = self.core.demods[demod].sample()
 
@@ -107,7 +103,7 @@ class MFLI(Instrument):
         y = sample["y"][0]
 
         return float(np.abs(x + 1j * y))
-    
+
     def p_val(self, demod=0) -> float:
         sample = self.core.demods[demod].sample()
 
@@ -115,7 +111,7 @@ class MFLI(Instrument):
         y = sample["y"][0]
 
         return float(np.rad2deg(np.arctan2(y, x)))
-    
+
     def get_r_unit(self, demods=0) -> str:
         match self.core.demods[demods].adcselect():
             case 0:
