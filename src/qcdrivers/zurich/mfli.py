@@ -123,3 +123,15 @@ class MFLI(Instrument):
 
     def get_idn(self) -> dict:
         return self.core.get_idn()
+    
+    def __getattr__(self, name):
+        # Avoid recursion for attributes that truly don't exist yet
+        if name == "core":
+            raise AttributeError("'Lockin' object has no attribute 'core'")
+        try:
+            return super().__getattribute__(name)
+        except AttributeError:
+            core = self.__dict__.get("core", None)
+            if core is not None and hasattr(core, name):
+                return getattr(core, name)
+            raise
