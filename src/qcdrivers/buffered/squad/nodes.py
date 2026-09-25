@@ -226,10 +226,7 @@ class NodeDummyAcquisition(BufferedNodeBase):
 
         # No control parameters -> plain random dummy data
         if param_x is None and param_y is None:
-            arrays = [
-                self.rng.standard_normal(self.num)
-                for _ in self.dependents
-            ]
+            arrays = [self.rng.standard_normal(self.num) for _ in self.dependents]
 
             self.frame += 1
             return arrays
@@ -239,14 +236,12 @@ class NodeDummyAcquisition(BufferedNodeBase):
             x = np.linspace(-1.0, 1.0, self.num)
 
             sigma = 0.15
-            data = np.exp(-(x - param_x) ** 2 / (2 * sigma**2))
+            data = np.exp(-((x - param_x) ** 2) / (2 * sigma**2))
 
         # Two control parameters -> 2D Gaussian
         else:
             if len(self.shape) != 2:
-                raise RuntimeError(
-                    "Two dummy control parameters require a 2D sweep."
-                )
+                raise RuntimeError("Two dummy control parameters require a 2D sweep.")
 
             ny, nx = self.shape
 
@@ -257,13 +252,7 @@ class NodeDummyAcquisition(BufferedNodeBase):
 
             sigma = 0.15
 
-            data = np.exp(
-                -(
-                    (X - param_x) ** 2
-                    + (Y - param_y) ** 2
-                )
-                / (2 * sigma**2)
-            )
+            data = np.exp(-((X - param_x) ** 2 + (Y - param_y) ** 2) / (2 * sigma**2))
 
         if self.noise > 0:
             data = data + self.noise * self.rng.standard_normal(data.shape)
