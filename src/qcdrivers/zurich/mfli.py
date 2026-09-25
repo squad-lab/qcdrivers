@@ -31,7 +31,7 @@ class MFLI(Instrument):
 
         self.frequency = self.core.oscs[0].freq
         self.amplitude = self.core.sigouts[0].amplitudes[1].value
-        self.on = self.sigouts[0].on
+        self.on = self.core.sigouts[0].on
 
         self.select_input = self.core.demods[
             0

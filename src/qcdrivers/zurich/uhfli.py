@@ -61,8 +61,8 @@ class UHFLI(Instrument):
         self.in1_imp50 = self.core.sigins[0].imp50
         self.in2_imp50 = self.core.sigins[1].imp50
 
-        self.on1 = self.sigouts[0].on
-        self.on2 = self.sigouts[1].on
+        self.on1 = self.core.sigouts[0].on
+        self.on2 = self.core.sigouts[1].on
 
         self.autosigout1 = self.core.sigouts[0].autorange
         self.autosigout2 = self.core.sigouts[1].autorange
