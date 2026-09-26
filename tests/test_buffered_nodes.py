@@ -30,7 +30,7 @@ from qcdrivers import buffered as instruments_module
 from qcdrivers.buffered import BufferedNodeBase
 from qcdrivers.buffered.keysight import NodeKeysightDMM, NodeKeysightVNA
 from qcdrivers.buffered.qdevil import NodeQDAC2
-from qcdrivers.buffered.squad import NodeDelay
+from qcdrivers.buffered.squad import NodeDummySweeper
 
 
 class FakeParam:
@@ -186,26 +186,29 @@ class TestBufferedNodeBase:
         assert node.abort() is None
 
 
-class TestNodeDelay:
+class TestNodeDummySweeper:
     """A virtual sweep node: it defines a timebase and steps nothing."""
 
     @pytest.fixture
     def node(self):
-        return NodeDelay(inst=SimpleNamespace(name="delay"))
+        return NodeDummySweeper(inst=SimpleNamespace(name="delay"))
 
     def test_registering_returns_the_point_count_and_spacing(self, node, gates):
         result = node.register_sweep(Sweep(gates.x, 0.0, 1.0, num=10, delay=0.05))
 
         assert result == (None, 10, 0.05)
 
-    def test_only_one_dimension_is_supported(self, node, gates):
-        with pytest.raises(ValueError, match="only supports 1D"):
-            node.register_sweep(
-                [
-                    Sweep(gates.x, 0.0, 1.0, num=4, delay=0.01),
-                    Sweep(gates.y, 0.0, 1.0, num=4, delay=0.01),
-                ]
-            )
+    def test_two_dimensions_are_supported(self, node, gates):
+        result = node.register_sweep(
+            [
+                Sweep(gates.x, 0.0, 1.0, num=4, delay=0.01),
+                Sweep(gates.y, 0.0, 1.0, num=5, delay=0.01),
+            ]
+        )
+
+        assert result == (None, (4, 5), 0.01)
+        assert node.shape == (4, 5)
+        assert node.total_num == 20
 
     def test_as_the_root_it_holds_the_acquisition_window_open(
         self, node, gates, monkeypatch

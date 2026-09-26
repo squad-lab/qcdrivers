@@ -16,7 +16,7 @@ PUBLIC_APIS = {
     "qcdrivers.buffered.basel": {"NodeBaselDAC"},
     "qcdrivers.buffered.keysight": {"NodeKeysightDMM", "NodeKeysightVNA"},
     "qcdrivers.buffered.qdevil": {"NodeQDAC2"},
-    "qcdrivers.buffered.squad": {"NodeDelay"},
+    "qcdrivers.buffered.squad": {"NodeDummySweeper", "NodeDummyAcquisition"},
     "qcdrivers.buffered.zurich": {"NodeMFLI", "NodeUHFLI"},
     "qcdrivers.entropy.adr": {"ADR"},
     "qcdrivers.entropy.heater": {"Heater"},
@@ -35,9 +35,10 @@ PUBLIC_APIS = {
         "VoltageMeasure",
         "VoltageSource",
     },
-    "qcdrivers.squad.helpers": {"Delay", "Lockin", "ShellInstrument"},
+    "qcdrivers.squad.helpers": {"Delay", "ShellInstrument"},
+    "qcdrivers.zurich": {"MFLI", "UHFLI"},
     "qcdrivers.squad.mux": {"Muxi"},
-    "qcdrivers.stanford": {"CS580"},
+    "qcdrivers.stanford": {"CS580", "SR830"},
 }
 
 
@@ -61,7 +62,8 @@ def test_concrete_buffered_nodes_are_not_exported_from_the_root_package():
 
     node_names = {
         "NodeBaselDAC",
-        "NodeDelay",
+        "NodeDummySweeper",
+        "NodeDummyAcquisition",
         "NodeKeysightDMM",
         "NodeKeysightVNA",
         "NodeMFLI",
