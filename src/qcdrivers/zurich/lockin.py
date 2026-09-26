@@ -1,15 +1,13 @@
-
 import types
 from collections.abc import Sequence
 
 import numpy as np
 from qcodes.instrument import Instrument
-
 from zhinst.qcodes import MFLI as ZIMFLI
 from zhinst.qcodes import UHFLI as ZIUHFLI
 
-
 # helper functions
+
 
 def dbm_to_vpk(power_dbm: float, out_impedance: float = 50) -> float:
     power_w = 1e-3 * 10 ** (power_dbm / 10)
@@ -25,8 +23,6 @@ def vpk_to_dbm(vpk: float, out_impedance: float = 50) -> float:
     power_w = vpk**2 / (2 * out_impedance)
 
     return float(10 * np.log10(power_w / 1e-3))
-
-
 
 
 class MFLI(Instrument):
@@ -172,7 +168,6 @@ class MFLI(Instrument):
             if core is not None and hasattr(core, name):
                 return getattr(core, name)
             raise
-
 
 
 class UHFLI(Instrument):
@@ -414,5 +409,3 @@ class UHFLI(Instrument):
             if core is not None and hasattr(core, name):
                 return getattr(core, name)
             raise
-
-
