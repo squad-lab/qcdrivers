@@ -13,6 +13,28 @@ from qcdrivers.buffered.base import BufferedNodeBase
 __all__ = ["NodeMFLI", "NodeUHFLI"]
 
 
+
+#helper for unit conversion of phase
+
+def convert_to_parameter_unit(
+    dependent: Parameter,
+    data,
+) -> np.ndarray:
+    """
+    Convert raw LabOne data to the unit defined by the QCoDeS parameter.
+    """
+    data = np.asarray(data)
+
+    unit = getattr(dependent, "unit", "")
+    zi_node = dependent.zi_node.lower()
+
+    if unit == "deg" and zi_node.endswith(".theta"):
+        data = np.rad2deg(data)
+
+    return data
+
+
+
 class NodeMFLI(BufferedNodeBase):
     """
     Zurich Instruments MFLI acquisition node using the LabOne DAQ module.
@@ -81,11 +103,10 @@ class NodeMFLI(BufferedNodeBase):
             ValueError: If *grid_mode* is unsupported.
 
         """
-        # Normalize the dependent list.
         if isinstance(dependent, Sequence):
-            self.dependents = [dep.zi_node.lower() for dep in dependent]
+            self.dependents = list(dependent)
         else:
-            self.dependents = [dependent.zi_node.lower()]
+            self.dependents = [dependent]
 
         if grid_mode not in ["nearest", "linear", "exact"]:
             raise ValueError(
@@ -141,11 +162,24 @@ class NodeMFLI(BufferedNodeBase):
 
         self.daq_module.set("holdoff/time", max(0.0, float(delay) * (cols - 0.5)))
 
+        self._daq_specs = []
         self._subs = []
+
         for dep in self.dependents:
-            path = f"/{self.serial}{dep}"
+            zi_node = dep.zi_node.lower()
+            path = f"/{self.serial}{zi_node}"
+
             self.daq_module.subscribe(path)
+
             self._subs.append(path)
+
+            self._daq_specs.append(
+                {
+                    "dependent": dep,
+                    "zi_node": zi_node,
+                    "path": path,
+                }
+            )
 
         self.daq_module.execute()
 
@@ -175,11 +209,21 @@ class NodeMFLI(BufferedNodeBase):
         self.daq_module.finish()
 
         arrays: list[np.ndarray] = []
-        for dep in self.dependents:
-            dep_split = dep.split("/")
-            data = result[self.serial][dep_split[1]][dep_split[2]][dep_split[3]][0][
+        for spec in self._daq_specs:
+            dependent = spec["dependent"]
+            zi_node = spec["zi_node"]
+
+            parts = zi_node.strip("/").split("/")
+
+            data = result[self.serial][parts[0]][parts[1]][parts[2]][0][
                 "value"
             ]
+
+            data = convert_to_parameter_unit(
+                dependent,
+                data,
+            )
+
             arrays.append(np.array(data).flatten())
 
         return arrays
@@ -402,11 +446,10 @@ class NodeUHFLI(BufferedNodeBase):
             ValueError: If *grid_mode* is unsupported.
 
         """
-        # Normalize the dependent list.
         if isinstance(dependent, Sequence):
-            self.dependents = [dep.zi_node.lower() for dep in dependent]
+            self.dependents = list(dependent)
         else:
-            self.dependents = [dependent.zi_node.lower()]
+            self.dependents = [dependent]
 
         if grid_mode not in ["nearest", "linear", "exact"]:
             raise ValueError(
@@ -469,11 +512,24 @@ class NodeUHFLI(BufferedNodeBase):
 
         self.daq_module.set("holdoff/time", max(0.0, float(delay) * (cols - 0.5)))
 
+        self._daq_specs = []
         self._subs = []
+
         for dep in self.dependents:
-            path = f"/{self.serial}{dep}"
+            zi_node = dep.zi_node.lower()
+            path = f"/{self.serial}{zi_node}"
+
             self.daq_module.subscribe(path)
+
             self._subs.append(path)
+
+            self._daq_specs.append(
+                {
+                    "dependent": dep,
+                    "zi_node": zi_node,
+                    "path": path,
+                }
+            )
 
         self.daq_module.execute()
 
@@ -663,12 +719,22 @@ class NodeUHFLI(BufferedNodeBase):
         self.daq_module.finish()
 
         arrays: list[np.ndarray] = []
-        for dep in self.dependents:
-            dep_split = dep.split("/")
-            data = result[self.serial][dep_split[1]][dep_split[2]][dep_split[3]][0][
+        for spec in self._daq_specs:
+            dependent = spec["dependent"]
+            zi_node = spec["zi_node"]
+
+            parts = zi_node.strip("/").split("/")
+
+            data = result[self.serial][parts[0]][parts[1]][parts[2]][0][
                 "value"
             ]
-            arrays.append(np.array(data).flatten())
+
+            data = convert_to_parameter_unit(
+                dependent,
+                data,
+            )
+
+            arrays.append(data.flatten())
 
         return arrays
 
@@ -729,7 +795,14 @@ class NodeUHFLI(BufferedNodeBase):
                     f"Available fields: {list(sample.keys())}"
                 )
 
-            arrays.append(np.asarray(sample[field]).flatten())
+            dependent = spec["dependent"]
+
+            data = convert_to_parameter_unit(
+                dependent,
+                sample[field],
+            )
+
+            arrays.append(data.flatten())
 
         self.sweeper_module.unsubscribe("*")
 
