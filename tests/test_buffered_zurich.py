@@ -135,7 +135,7 @@ def test_mfli_configures_a_one_dimensional_acquisition(mfli):
 
     module = node.daq_module
     assert node.dependents == [signal]
-    
+
     assert ("/dev1234/demods/0/enable", 1) in server.int_settings
     assert ("/dev1234/demods/0/timeconstant", 0.001) in server.double_settings
     assert last_setting(module, "grid/mode") == "linear"
@@ -455,6 +455,7 @@ def test_uhfli_fetches_and_flattens_daq_values(uhfli):
 
     np.testing.assert_array_equal(arrays[0], [1, 2, 3, 4])
 
+
 def test_uhfli_fetches_and_converts_daq_values(uhfli):
     node, _ = uhfli
 
@@ -478,12 +479,8 @@ def test_uhfli_fetches_and_converts_daq_values(uhfli):
         "dev1234": {
             "demods": {
                 "0": {
-                    "sample.r": [
-                        {"value": [[1, 2], [3, 4]]}
-                    ],
-                    "sample.theta": [
-                        {"value": [[0.1, 0.2], [0.3, 0.4]]}
-                    ],
+                    "sample.r": [{"value": [[1, 2], [3, 4]]}],
+                    "sample.theta": [{"value": [[0.1, 0.2], [0.3, 0.4]]}],
                 }
             }
         }
