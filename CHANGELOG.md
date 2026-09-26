@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.6.1 (2026-09-26)
+
+### Bug Fixes
+
+- Fixed wrong p unit on daq acquisition with lockin
+  ([`cefd099`](https://gitlab.com/squad-lab/qcdrivers/-/commit/cefd099f2331a78c8ee54d09664ea6c73e48eac4))
+
+
 ## v0.6.0 (2026-09-26)
 
 ### Features
