@@ -91,8 +91,14 @@ def zurich_instrument(server, serial="dev1234"):
     return SimpleNamespace(core=core)
 
 
-def zi_parameter(path, name="signal"):
-    return SimpleNamespace(zi_node=path, full_name=name)
+def zi_parameter(path, name="signal", unit=""):
+    return SimpleNamespace(
+        zi_node=path,
+        full_name=name,
+        name=name,
+        label=name,
+        unit=unit,
+    )
 
 
 def last_setting(module, key):
@@ -128,7 +134,8 @@ def test_mfli_configures_a_one_dimensional_acquisition(mfli):
     node.register_dependent(signal, num=6, delay=0.001)
 
     module = node.daq_module
-    assert node.dependents == ["/demods/0/sample.r"]
+    assert node.dependents == [signal]
+
     assert ("/dev1234/demods/0/enable", 1) in server.int_settings
     assert ("/dev1234/demods/0/timeconstant", 0.001) in server.double_settings
     assert last_setting(module, "grid/mode") == "linear"
@@ -449,13 +456,62 @@ def test_uhfli_fetches_and_flattens_daq_values(uhfli):
     np.testing.assert_array_equal(arrays[0], [1, 2, 3, 4])
 
 
+def test_uhfli_fetches_and_converts_daq_values(uhfli):
+    node, _ = uhfli
+
+    node.register_dependent(
+        [
+            zi_parameter(
+                "/demods/0/sample.r",
+                unit="V",
+            ),
+            zi_parameter(
+                "/demods/0/sample.theta",
+                unit="deg",
+            ),
+        ],
+        num=4,
+        delay=0.01,
+        acquisition="daq",
+    )
+
+    node.daq_module.read_result = {
+        "dev1234": {
+            "demods": {
+                "0": {
+                    "sample.r": [{"value": [[1, 2], [3, 4]]}],
+                    "sample.theta": [{"value": [[0.1, 0.2], [0.3, 0.4]]}],
+                }
+            }
+        }
+    }
+
+    arrays = node.fetch()
+
+    np.testing.assert_array_equal(
+        arrays[0],
+        [1, 2, 3, 4],
+    )
+
+    np.testing.assert_allclose(
+        arrays[1],
+        np.rad2deg([0.1, 0.2, 0.3, 0.4]),
+    )
+
+
 def test_uhfli_fetches_and_flattens_sweeper_fields(uhfli, monkeypatch):
     node, _ = uhfli
     monkeypatch.setattr("qcdrivers.buffered.zurich.nodes.sleep", lambda seconds: None)
     node.register_dependent(
         [
-            zi_parameter("/demods/0/sample.r"),
-            zi_parameter("/demods/0/sample.theta"),
+            zi_parameter(
+                "/demods/0/sample.r",
+                unit="V",
+            ),
+            zi_parameter(
+                "/demods/0/sample.theta",
+                unit="deg",
+            ),
         ],
         num=3,
         delay=0.1,
@@ -483,7 +539,7 @@ def test_uhfli_fetches_and_flattens_sweeper_fields(uhfli, monkeypatch):
     arrays = node.fetch(timeout=1.0)
 
     np.testing.assert_allclose(arrays[0], [1.0, 2.0, 3.0])
-    np.testing.assert_allclose(arrays[1], [0.1, 0.2, 0.3])
+    np.testing.assert_allclose(arrays[1], np.rad2deg([0.1, 0.2, 0.3]))
     assert node.sweeper_module.finish_calls == 1
     assert node.sweeper_module.unsubscribe_calls[-1] == "*"
 
