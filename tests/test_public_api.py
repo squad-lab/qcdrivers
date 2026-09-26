@@ -35,9 +35,10 @@ PUBLIC_APIS = {
         "VoltageMeasure",
         "VoltageSource",
     },
-    "qcdrivers.squad.helpers": {"Delay", "Lockin", "ShellInstrument"},
+    "qcdrivers.squad.helpers": {"Delay", "ShellInstrument"},
+    "qcdrivers.zurich": {"MFLI", "UHFLI"},
     "qcdrivers.squad.mux": {"Muxi"},
-    "qcdrivers.stanford": {"CS580"},
+    "qcdrivers.stanford": {"CS580", "SR830"},
 }
 
 
