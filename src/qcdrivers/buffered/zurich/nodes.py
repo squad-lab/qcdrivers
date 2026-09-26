@@ -13,8 +13,8 @@ from qcdrivers.buffered.base import BufferedNodeBase
 __all__ = ["NodeMFLI", "NodeUHFLI"]
 
 
+# helper for unit conversion of phase
 
-#helper for unit conversion of phase
 
 def convert_to_parameter_unit(
     dependent: Parameter,
@@ -32,7 +32,6 @@ def convert_to_parameter_unit(
         data = np.rad2deg(data)
 
     return data
-
 
 
 class NodeMFLI(BufferedNodeBase):
@@ -215,9 +214,7 @@ class NodeMFLI(BufferedNodeBase):
 
             parts = zi_node.strip("/").split("/")
 
-            data = result[self.serial][parts[0]][parts[1]][parts[2]][0][
-                "value"
-            ]
+            data = result[self.serial][parts[0]][parts[1]][parts[2]][0]["value"]
 
             data = convert_to_parameter_unit(
                 dependent,
@@ -725,9 +722,7 @@ class NodeUHFLI(BufferedNodeBase):
 
             parts = zi_node.strip("/").split("/")
 
-            data = result[self.serial][parts[0]][parts[1]][parts[2]][0][
-                "value"
-            ]
+            data = result[self.serial][parts[0]][parts[1]][parts[2]][0]["value"]
 
             data = convert_to_parameter_unit(
                 dependent,
