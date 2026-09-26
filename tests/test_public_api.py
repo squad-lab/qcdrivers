@@ -36,7 +36,7 @@ PUBLIC_APIS = {
         "VoltageSource",
     },
     "qcdrivers.squad.helpers": {"Delay", "ShellInstrument"},
-    "qcdrivers.zurich": {"MFLI", "UHFLI"},
+    "qcdrivers.zurich.lockin": {"MFLI", "UHFLI"},
     "qcdrivers.squad.mux": {"Muxi"},
     "qcdrivers.stanford": {"CS580", "SR830"},
 }

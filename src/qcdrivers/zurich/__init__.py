@@ -1,7 +1,6 @@
 """Zurich instruments wrapper drivers."""
 
-from qcdrivers.zurich.mfli import MFLI
-from qcdrivers.zurich.uhfli import UHFLI
+from qcdrivers.zurich.lockin import MFLI, UHFLI
 
 __all__ = [
     "MFLI",
