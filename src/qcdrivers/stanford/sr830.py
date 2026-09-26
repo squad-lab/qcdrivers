@@ -31,6 +31,6 @@ class SR830(Instrument):
 
         self.core.R.label = f"{name} R"
         self.core.P.label = f"{name} P"
-    
+
     def get_idn(self) -> dict:
         return self.core.get_idn()
