@@ -31,7 +31,7 @@ dependencies = [
   "requests>=2.32",
   "scipy>=1.15.2",
   "zhinst>=25.1.0",
-  "zhinst-qcodes>=0.6.0",
+  "zhinst-qcodes>=0.8.0",
 ]
 
 [project.optional-dependencies]
