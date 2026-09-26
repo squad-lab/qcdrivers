@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v0.6.0 (2026-09-26)
+
+### Features
+
+- Add controlability over dummy acqusition data
+  ([`22b3138`](https://gitlab.com/squad-lab/qcdrivers/-/commit/22b3138c9f550c5aad4a48053004cc64fbc35769))
+
+### Refactoring
+
+- Move NodeDelay to NodeDummySweeper
+  ([`0823315`](https://gitlab.com/squad-lab/qcdrivers/-/commit/08233153341fcc7d1c593646ebac6fb44c7cc89e))
+
+
 ## v0.5.0 (2026-09-24)
 
 ### Features
