@@ -113,6 +113,8 @@ class PNABase(N52xx.KeysightPNABase):
                     unit=unit,
                     get_cmd=self._get_s_parameter(sparam, comp),
                     set_cmd=False,
+                    # Reading data selects/creates traces; snapshots use the cache.
+                    snapshot_get=False,
                 )
                 self.parameters[name]._sparam = sparam
                 self.parameters[name]._component = comp
@@ -425,9 +427,14 @@ class PNABase(N52xx.KeysightPNABase):
 
     def configure_active_s_parameters(self, sparams: list[str]):
         """
-        Activates s parameter channel always on trace 1 (display use-case).
-        NOTE: Your internal getters do not rely on this display setup anymore.
+        Replace displayed traces and bind QCoDeS shortcuts to the first trace.
+
+        At least one S-parameter is required. Component getters manage their
+        own traces independently of this display setup.
         """
+        if not sparams:
+            raise ValueError("At least one S-parameter must be configured.")
+
         allowed = self.sparams_list
         for s in sparams:
             if s not in allowed:
@@ -450,6 +457,12 @@ class PNABase(N52xx.KeysightPNABase):
                 self.write(f'DISPlay:WIND1:TRACe{trace_index}:FEED "{trace_name}"')
 
             trace_index += 1
+
+        # QCoDeS binds these shortcuts to the first trace at initialization.
+        # Rebuild its channel list and rebind after deleting that original trace.
+        first_trace = self.traces[0]
+        self.parameters.update(first_trace.parameters)
+        self.run_sweep = first_trace.run_sweep
 
 
 class N5222B(PNABase):
