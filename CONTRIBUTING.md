@@ -17,6 +17,7 @@ request and describe what you were able to verify.
 - [Contributing to QCDrivers](#contributing-to-qcdrivers)
   - [Table of Contents](#table-of-contents)
   - [Development](#development)
+    - [Python support policy](#python-support-policy)
     - [Setup](#setup)
     - [Before you push](#before-you-push)
     - [Adding or updating a driver](#adding-or-updating-a-driver)
@@ -28,7 +29,13 @@ request and describe what you were able to verify.
 
 ## Development
 
-QCDrivers requires Python 3.13 or later and uses [uv](https://docs.astral.sh/uv/) for dependency management.
+QCDrivers uses [uv](https://docs.astral.sh/uv/) for dependency management.
+
+### Python support policy
+
+We support the second-newest stable Python feature release. This balances timely
+security and bug-fix support with enough time for our dependencies to stabilize
+on each new Python version.
 
 ### Setup
 
