@@ -28,8 +28,7 @@ request and describe what you were able to verify.
 
 ## Development
 
-QCDrivers requires Python 3.13 and uses [uv](https://docs.astral.sh/uv/) for
-dependency management.
+QCDrivers requires Python 3.13 or later and uses [uv](https://docs.astral.sh/uv/) for dependency management.
 
 ### Setup
 
