@@ -70,10 +70,10 @@ lint:
 
 pytest:
   stage: test
-  # Python 3.13 is the supported runtime for this release.
+  # 3.13 is the minimum supported Python
   parallel:
     matrix:
-      - PYTHON_VERSION: ["3.13"]
+      - PYTHON_VERSION: ["3.13", "3.14"]
   image: "python:${PYTHON_VERSION}"
   before_script:
     - curl -LsSf https://astral.sh/uv/install.sh | sh
@@ -100,8 +100,9 @@ pytest-windows:
   stage: test
   tags:
     - windows
+  image: "python:3.14-windowsservercore-ltsc2025"
   variables:
-    PYTHON_VERSION: "3.13"
+    PYTHON_VERSION: "3.14"
   before_script:
     - powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
     - $env:Path = "$env:USERPROFILE\.local\bin;$env:Path"

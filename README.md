@@ -14,7 +14,7 @@ developed in collaboration with partner companies.
 
 ## Installation
 
-QCDrivers requires Python 3.13 and can be installed with either `uv` or `pip`:
+QCDrivers requires Python 3.13 or later and can be installed with either `uv` or `pip`:
 
 ```console
 uv add qcdrivers
