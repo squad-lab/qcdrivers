@@ -2,6 +2,27 @@
 
 <!-- version list -->
 
+## v0.6.2 (2026-11-10)
+
+### Bug Fixes
+
+- Update lockfile for Python 3.14
+  ([`6f70641`](https://gitlab.com/squad-lab/qcdrivers/-/commit/6f70641524f7bbfaa8068931e76f9ff66f6330f6))
+
+- **deps**: Drop pytest from runtime dependencies
+  ([`fcbef77`](https://gitlab.com/squad-lab/qcdrivers/-/commit/fcbef77a8b322ba94cabbe2b4fb72d841a05db9d))
+
+### Chores
+
+- Update Python version requirements to support 3.14 & fix Windows CI
+  ([`d17a195`](https://gitlab.com/squad-lab/qcdrivers/-/commit/d17a195068eb5231fe24047cd339c30dcfcd2d0c))
+
+### Documentation
+
+- Document Python support policy
+  ([`e993b21`](https://gitlab.com/squad-lab/qcdrivers/-/commit/e993b21d79210d43851205dc32095b61e025481e))
+
+
 ## v0.6.1 (2026-09-26)
 
 ### Bug Fixes
